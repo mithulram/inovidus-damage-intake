@@ -29,5 +29,8 @@ R3-01 "Musterstraße 12 oder 14" not seen as two buildings · R3-02 "bei der Hau
 R4-01 "Anschrift"/"house number" uncertainty not recognised as building uncertainty · R4-02 UI could approve a reply/task text it had not displayed · R4-03 an order for an earlier assignment showed as done after reassignment.
 - Claude fixed all three (+5 regression tests); end-to-end browser run (Playwright, real Chrome) of S1 approve+order, S2 manual approval with reason, S4c registered-address variant, S5b building action: no errors. 558 tests.
 
-## Inspection 5 – not completed
-Codex stopped with "usage limit reached" (resets 19 Nov 2026 00:14). Round 5 did not run; the last completed independent score is **8/10 (round 4)**, whose 3 findings are fixed with regression tests. Per Mithul's rules, the reviewer is not switched to Claude without his OK.
+## Inspection 5 – first attempt failed (Codex usage limit, 18 Nov 21:50); Mithul chose to wait for the reset.
+
+## Inspection 5 – full build (by Codex, fresh session, 19 Nov 00:17, 261 s) – **Score 7/10, 3 findings**
+R5-01 "Vielleicht Musterstr. 12" kept only "Vielleicht" → building not marked uncertain · R5-02 gas recognised only by the reader did not activate gas safety advice · R5-03 a slow, older run could overwrite a newer result; approval did not check the rules version.
+- Claude fixed R5-02 (config `category_hazards`), R5-03 (generation stamped at processing start; 409 when rules changed). Codex fixed R5-01 (WO6) and flagged a follow-up in matching.py ("Musterstraße12"), fixed by Claude. 588 tests.
