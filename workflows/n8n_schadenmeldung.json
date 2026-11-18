@@ -1,0 +1,664 @@
+{
+  "name": "Schadenmeldung – KI-gestützte Erfassung",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "schadenmeldung",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "300175ef-be05-4c26-aec6-5d45c6838795",
+      "name": "E-Mail eingegangen",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        460
+      ],
+      "webhookId": "3b445fcc-0208-442a-8bf4-ce9f0149c01a"
+    },
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "nothing",
+        "options": {}
+      },
+      "id": "585f377e-f775-4572-8933-1c70a49cd9ef",
+      "name": "Postfach (Produktion, aus)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        0,
+        660
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c52a6139-f674-4602-84df-afb8dacef928",
+              "name": "email",
+              "type": "object",
+              "value": "={{ { subject: $json.body.subject || '', body: $json.body.body || $json.body.text || '', sender_email: $json.body.sender_email || $json.body.from || null, message_id: $json.body.message_id || null } }}"
+            },
+            {
+              "id": "1b7d400c-71f3-47c5-a56a-c723c68c9b03",
+              "name": "provider",
+              "type": "string",
+              "value": "={{ $json.body.provider || 'offline' }}"
+            },
+            {
+              "id": "e9c09945-82c0-490f-8618-44f962fe1c32",
+              "name": "scenario_id",
+              "type": "string",
+              "value": "={{ $json.body.scenario_id || '' }}"
+            },
+            {
+              "id": "api-url",
+              "name": "api_url",
+              "type": "string",
+              "value": "http://127.0.0.1:8000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "509f45d4-0144-4a1e-a92d-2e4f8c6361d1",
+      "name": "E-Mail vorbereiten",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/understand' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.email, provider: $json.provider, scenario_id: $json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "21539838-ce09-4d91-a4bd-e87a9a8b50bb",
+      "name": "1 Verstehen (KI oder Regeln)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/match' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "e8a6298a-1380-4e7f-894b-f989f4857246",
+      "name": "2 Zuordnung im ERP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/prior_cases' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "f3bd09ab-34e8-4436-a775-464aa9ade2d9",
+      "name": "3 Frühere Vorgänge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/urgency' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "acf1ca13-a426-4329-92d7-929df9c91bad",
+      "name": "4 Dringlichkeit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/draft' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "078122ec-0614-4342-a03b-5f27946821da",
+      "name": "5 Antwortentwurf (nie senden)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/task' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "be24ebb0-4af9-4cdc-b060-3ae5518d9451",
+      "name": "6 Interne Aufgabe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "021da841-fb74-45dd-a991-4858c7c6803a",
+              "leftValue": "={{ $json.urgency.level }}",
+              "rightValue": "NOTFALL",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d8063bf9-83ac-4ad3-b31b-71d308275c32",
+      "name": "Notfall?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        460
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "27dc0e85-b56b-4afd-ac92-b6b77ded3851",
+      "name": "Bereitschaft alarmieren (Produktion: SMS)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2480,
+        720
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "609d3054-1a10-450d-b019-679ec0c22043",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "READY_FOR_APPROVAL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "eindeutig"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b070bb6f-aac8-42f4-a13b-7611155eb13b",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "NEEDS_REVIEW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Prüfung nötig"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "73aff110-4ccb-4e08-aef7-6c1372cacd3b",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "OUT_OF_SCOPE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "kein Schaden"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2fa54b8a-b8a1-44c5-a036-5c412006a34c",
+      "name": "Status?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2480,
+        460
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "41d9b40f-4d45-46d1-a21e-c05bb7020ed2",
+      "name": "Vorschlag zur Freigabe",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "9d08ee5f-ba9c-4f2e-b192-61da94ce769e",
+      "name": "Rückfrage vorbereitet",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        460
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "db063e4d-611d-44ba-aa90-d1b009915358",
+      "name": "An Fachstelle weiterleiten",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/cases' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "87a15cfc-0150-4c11-ada6-496c4cfa7cd2",
+      "name": "In Prüfliste ablegen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3000,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# Schadenmeldung – KI-gestützte Erfassung\nEine E-Mail läuft durch **sechs feste Schritte**; jeder Knoten ruft genau einen Schritt im Python-Dienst auf (`/api/steps/…`).\n**n8n leitet nur weiter – entschieden wird im Dienst nach `config/rules.yaml`.** Gehandelt wird erst nach menschlicher Freigabe im Prüfplatz (http://127.0.0.1:8000).",
+        "height": 220,
+        "width": 1180,
+        "color": 4
+      },
+      "id": "5b26bf36-349e-4987-85ef-e096b0be378a",
+      "name": "Titel",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Eingang\nDemo: Webhook (JSON mit subject, body, sender_email).\nProduktion: Postfach (IMAP / Microsoft 365) – hier absichtlich aus.\n„E-Mail vorbereiten“ enthält die Dienst-Adresse `api_url`.",
+        "height": 620,
+        "width": 500,
+        "color": 7
+      },
+      "id": "a88d70c1-b379-4ffc-9fd7-3850679c45d6",
+      "name": "Eingang",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1 Lesen\nDie KI (Groq) liest nur: Art, Schadenart, Fakten, Dringlichkeits-Hinweis.\nSchlüssel bleibt im Dienst. Ohne Schlüssel: Regelmodus.",
+        "height": 520,
+        "width": 300,
+        "color": 6
+      },
+      "id": "beca5215-8316-4418-bf03-c57c03756b71",
+      "name": "Lesen",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        480,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2–3 Zuordnen – feste Regeln\nPunkte je Merkmal · Widerspruch = Veto · Schwelle · Abstand · Vertrag aktiv?\nUnklar → **Prüfung nötig**. Die KI wählt nie den Vertrag. Dazu frühere Vorgänge derselben Einheit.",
+        "height": 520,
+        "width": 560,
+        "color": 5
+      },
+      "id": "5a5384e9-528b-423f-ae73-39e542d8cf82",
+      "name": "Zuordnen",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        800,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4–6 Einstufen und vorbereiten\nDringlichkeit: Regeln setzen die Untergrenze, die KI darf nur erhöhen.\nAntwort und Aufgabe werden **nur entworfen – nie gesendet**.",
+        "height": 520,
+        "width": 780,
+        "color": 3
+      },
+      "id": "7a627c23-5959-41c2-94b7-4a4fe68d83f6",
+      "name": "Einstufen",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1380,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Weiterleiten\nn8n liest nur `status` und `urgency.level`.\nAlles landet in der Prüfliste; Notfälle stehen dort oben. `/api/approve` ruft n8n **nie** auf.",
+        "height": 1000,
+        "width": 1020,
+        "color": 2
+      },
+      "id": "e9bc0c3f-1c21-47a8-9ae5-d25543fc3286",
+      "name": "Weiterleiten",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2180,
+        100
+      ]
+    }
+  ],
+  "connections": {
+    "1 Verstehen (KI oder Regeln)": {
+      "main": [
+        [
+          {
+            "node": "2 Zuordnung im ERP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 Zuordnung im ERP": {
+      "main": [
+        [
+          {
+            "node": "3 Frühere Vorgänge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 Frühere Vorgänge": {
+      "main": [
+        [
+          {
+            "node": "4 Dringlichkeit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 Dringlichkeit": {
+      "main": [
+        [
+          {
+            "node": "5 Antwortentwurf (nie senden)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 Antwortentwurf (nie senden)": {
+      "main": [
+        [
+          {
+            "node": "6 Interne Aufgabe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E-Mail eingegangen": {
+      "main": [
+        [
+          {
+            "node": "E-Mail vorbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E-Mail vorbereiten": {
+      "main": [
+        [
+          {
+            "node": "1 Verstehen (KI oder Regeln)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 Interne Aufgabe": {
+      "main": [
+        [
+          {
+            "node": "Notfall?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notfall?": {
+      "main": [
+        [
+          {
+            "node": "Bereitschaft alarmieren (Produktion: SMS)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Status?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Status?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status?": {
+      "main": [
+        [
+          {
+            "node": "Vorschlag zur Freigabe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rückfrage vorbereitet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "An Fachstelle weiterleiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vorschlag zur Freigabe": {
+      "main": [
+        [
+          {
+            "node": "In Prüfliste ablegen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rückfrage vorbereitet": {
+      "main": [
+        [
+          {
+            "node": "In Prüfliste ablegen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "An Fachstelle weiterleiten": {
+      "main": [
+        [
+          {
+            "node": "In Prüfliste ablegen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": [],
+  "id": "iM8N72bLtuYUcMK3"
+}
