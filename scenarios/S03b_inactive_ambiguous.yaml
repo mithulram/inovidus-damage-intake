@@ -1,0 +1,28 @@
+id: S3b
+title: Inaktiver und aktiver Vertrag auf derselben Etage, Seite fehlt
+description: Der inaktive Vertrag bleibt im Vergleich – das aktive Nachbar-Apartment wird NICHT automatisch gewählt.
+email:
+  subject: "Wasser unter der Spüle"
+  sender_email: max.mustermann@example.org
+  body: |
+    Hallo, bei uns läuft Wasser unter der Spüle aus. Wir wohnen in der Musterstr. 12, 2. Etage. Viele Grüße, Max Mustermann
+data_overrides:
+  contracts:
+    - { contract_id: MV-10245, active: false }
+    - contract_id: MV-10999
+      tenant_name: Max Mustermann
+      object_id: OBJ-MS12
+      street: Musterstraße
+      house_no: "12"
+      floor: 2
+      floor_label: 2. OG
+      side: R
+      side_label: re.
+      unit_id: OBJ-MS12-2R
+      active: true
+      contact: { email: max.mustermann@example.org, phone: null, synthetic: true }
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  urgency: DRINGEND
+  failed_gates: [margin]

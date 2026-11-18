@@ -1,0 +1,13 @@
+id: S10
+title: Heizungsausfall im November
+description: In der Heizperiode (Okt–Apr) ist ein Heizungsausfall ein Notfall – Regel in rules.yaml.
+email:
+  subject: "Heizung ausgefallen"
+  received_at: "2026-11-18T08:15:00+01:00"
+  body: |
+    Guten Morgen, seit heute Nacht ist die Heizung ausgefallen, die Wohnung ist kalt. Musterstr. 12, 3. OG rechts. Max Mustermann
+expected:
+  status: READY_FOR_APPROVAL
+  contract: MV-10487
+  urgency: NOTFALL
+  failed_gates: []

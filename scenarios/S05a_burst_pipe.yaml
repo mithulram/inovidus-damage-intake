@@ -1,0 +1,13 @@
+id: S5a
+title: Notfall – Rohrbruch
+description: Wasser kommt durch die Decke. Notfall mit Sicherheitshinweisen, Einheit eindeutig.
+email:
+  subject: "NOTFALL Rohrbruch"
+  body: |
+    Hilfe, bei uns ist ein Rohr geplatzt, das Wasser kommt durch die Decke ins Badezimmer! Musterstr. 12, 2. OG links. Max Mustermann
+expected:
+  status: READY_FOR_APPROVAL
+  contract: MV-10245
+  urgency: NOTFALL
+  failed_gates: []
+  safety_instructions: true

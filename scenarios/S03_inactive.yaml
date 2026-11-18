@@ -1,0 +1,16 @@
+id: S3
+title: Vertrag MV-10245 inaktiv
+description: Die Einheit wird erkannt, aber der Vertrag ist beendet. Kein Ausweichen auf MV-10487.
+email:
+  subject: "Wasserschaden Küche, Musterstraße 12"
+  body: |
+    Hallo, seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen. Wir wohnen in der Musterstr. 12, zweite Etage links. Bitte dringend jemanden schicken. Fotos sind vorhanden. Viele Grüße, Max Mustermann
+data_overrides:
+  contracts:
+    - { contract_id: MV-10245, active: false }
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  winner: MV-10245
+  urgency: DRINGEND
+  failed_gates: [eligibility]

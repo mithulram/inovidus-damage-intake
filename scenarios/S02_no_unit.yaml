@@ -1,0 +1,13 @@
+id: S2
+title: Ohne Etage und Seite
+description: Gleiche Nachricht ohne "zweite Etage links" – zwei Verträge passen gleich gut.
+email:
+  subject: "Wasserschaden Küche, Musterstraße 12"
+  body: |
+    Hallo, seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen. Wir wohnen in der Musterstr. 12. Bitte dringend jemanden schicken. Fotos sind vorhanden. Viele Grüße, Max Mustermann
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  urgency: DRINGEND
+  failed_gates: [floor_missing, threshold, margin]
+  reply_language: de

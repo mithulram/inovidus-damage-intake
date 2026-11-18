@@ -1,0 +1,14 @@
+id: S8
+title: Schwelle gesenkt, anderes Gebäude
+description: Selbst mit Schwelle 0.65 darf ein anderes Gebäude nie "eindeutig" werden – die Adresse widerspricht (Veto).
+rule_overrides:
+  match: { threshold: 0.65 }
+email:
+  subject: "Wasser in der Küche"
+  sender_email: max.mustermann@example.org
+  body: |
+    Hallo, bei uns läuft Wasser unter der Spüle aus. Musterstraße 16, 2. OG links. Max Mustermann
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  failed_gates: [veto_address]

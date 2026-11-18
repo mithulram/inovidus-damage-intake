@@ -1,0 +1,15 @@
+id: S4c
+title: Richtiger Mieter, unbekannte E-Mail-Adresse
+description: Alles passt, aber die Mail kommt von einer privaten Adresse. Sachbearbeiter entscheidet – mit Warnung und drei Optionen.
+email:
+  subject: "Wasserschaden Küche, Musterstraße 12"
+  sender_email: max.privat@example.net
+  body: |
+    Hallo, seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen. Wir wohnen in der Musterstr. 12, zweite Etage links. Bitte dringend jemanden schicken. Fotos sind vorhanden. Viele Grüße, Max Mustermann
+expected:
+  status: READY_FOR_APPROVAL
+  contract: MV-10245
+  urgency: DRINGEND
+  failed_gates: []
+  warning_contains: "registrierten E-Mail-Adresse"
+  staff_options_available: [reply_anyway, ask_registered_email, call_tenant]

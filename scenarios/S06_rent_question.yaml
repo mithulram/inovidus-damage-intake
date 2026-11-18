@@ -1,0 +1,13 @@
+id: S6
+title: Keine Schadenmeldung – Frage zur Miete
+description: Wird erkannt und an die Mietbuchhaltung weitergeleitet. Keine Schadenaufgabe.
+email:
+  subject: "Frage zur Mieterhöhung"
+  body: |
+    Guten Tag, ich habe eine Frage zur Mieterhöhung ab Januar. Ist der neue Betrag schon in der Lastschrift berücksichtigt? Musterstr. 12, 2. OG links. Viele Grüße, Max Mustermann
+expected:
+  type: ANFRAGE_MIETE
+  status: OUT_OF_SCOPE
+  contract: null
+  failed_gates: [out_of_scope]
+  task_scope: routing

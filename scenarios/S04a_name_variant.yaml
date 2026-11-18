@@ -1,0 +1,13 @@
+id: S4a
+title: Name anders geschrieben
+description: "M. Musterman" – ähnlich, aber nicht gleich. Absender ist die registrierte Adresse, Punkte reichen, trotzdem Prüfung.
+email:
+  subject: "Wasserschaden Küche"
+  sender_email: max.mustermann@example.org
+  body: |
+    Hallo, seit gestern läuft Wasser unter unserer Spüle aus. Wir wohnen in der Musterstr. 12, zweite Etage links. Viele Grüße, M. Musterman
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  winner: MV-10245
+  failed_gates: [identity]

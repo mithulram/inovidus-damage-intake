@@ -1,0 +1,152 @@
+# =============================================================================
+#  Geschäftsregeln – die EINZIGE Stelle, an der fachliche Regeln stehen.
+#  Eine Regel ändern = eine Zeile hier ändern und neu ausführen.
+#  (Secrets und Anbieter-Auswahl stehen in .env, nicht hier.)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1) Zuordnung zum ERP (Mieter / Objekt / Einheit)
+# -----------------------------------------------------------------------------
+match:
+  threshold: 0.85            # Mindestpunktzahl des besten Kandidaten (0..1)
+  min_margin: 0.15           # Mindestabstand zum Zweitbesten
+  candidate_name_min: 80     # ab dieser Namensähnlichkeit (0..100) wird ein Vertrag überhaupt Kandidat
+  name_full_min: 92          # ab hier zählt der Name voll
+  name_partial_min: 80       # zwischen partial und full: halbe Punkte + "Name weicht ab" (Prüfung nötig)
+  weights:                   # Summe = 1.0
+    name: 0.30
+    address: 0.30
+    floor: 0.20
+    side: 0.10
+    contact: 0.10
+  unknown_sender_forces_review: false   # true = Mail von unbekannter Adresse immer prüfen lassen
+
+# -----------------------------------------------------------------------------
+# 2) Normalisierung (deutsche Zählweise: EG = Erdgeschoss, 1. OG = erste Etage)
+# -----------------------------------------------------------------------------
+normalize:
+  english_floor_counting: ask   # ask = "2nd floor" zählt als 2. OG, aber Rückfrage nötig | european = ohne Rückfrage
+  ordinal_words:                # Zahlwörter -> Etage
+    erste: 1
+    erster: 1
+    ersten: 1
+    zweite: 2
+    zweiter: 2
+    zweiten: 2
+    dritte: 3
+    dritter: 3
+    dritten: 3
+    vierte: 4
+    vierter: 4
+    vierten: 4
+    fünfte: 5
+    fünfter: 5
+    fünften: 5
+  ground_floor_terms: [eg, erdgeschoss, parterre, "ground floor"]
+  unclear_floor_terms: [hochparterre, souterrain, "ganz oben", oben, unten, dachgeschoss, dg, keller, ug, untergeschoss, "top floor", "upstairs", "downstairs"]
+  side_terms:
+    L: [links, li, "li.", "l.", left]
+    R: [rechts, re, "re.", "r.", right]
+    M: [mitte, mittig, middle, center]
+
+# -----------------------------------------------------------------------------
+# 3) Art der Nachricht und Schadenart
+# -----------------------------------------------------------------------------
+classification:
+  out_of_scope:                 # keine Schadenmeldung -> weiterleiten, keine Schadenaufgabe
+    ANFRAGE_MIETE:
+      keywords: [miete, mietzahlung, nebenkosten, betriebskosten, kaution, mieterhöhung, lastschrift, rent, deposit]
+      route_to: Mietbuchhaltung
+    SONSTIGES:
+      keywords: []
+      route_to: Kundenservice
+  damage_keywords: [schaden, wasser, undicht, kaputt, defekt, leck, tropft, läuft, rohr, schimmel, heizung, gas, strom, ausfall, verstopf, leak, leaking, broken, water, damage, flood, mould, mold, heating]
+  categories:                    # Reihenfolge = Priorität bei mehreren Treffern
+    - name: Gasgeruch
+      trade: Gas / Heizung
+      keywords: [gasgeruch, "nach gas", "riecht nach gas", "smell of gas", "gas smell", "smells of gas"]
+    - name: Rohrbruch
+      trade: Sanitär
+      keywords: [rohrbruch, "rohr geplatzt", "burst pipe", "pipe burst", "wasser kommt durch die decke", "water through the ceiling", "durch die decke"]
+    - name: Wasserschaden
+      trade: Sanitär
+      keywords: [wasser, undicht, leck, tropft, "läuft aus", spüle, waschbecken, aufgequollen, feucht, water, leak, leaking, sink]
+    - name: Rohrverstopfung
+      trade: Sanitär
+      keywords: [verstopf, "läuft nicht ab", abfluss, clogged, blocked]
+    - name: Heizungsausfall
+      trade: Heizung
+      keywords: [heizung, "kein warmwasser", "kalt", heating, "no hot water"]
+    - name: Elektrik
+      trade: Elektro
+      keywords: [strom, sicherung, steckdose, kurzschluss, electricity, power]
+    - name: Schimmel
+      trade: Maler / Bautrocknung
+      keywords: [schimmel, mould, mold]
+    - name: Fenster/Türen
+      trade: Schreiner
+      keywords: [fenster, tür, schloss, window, door]
+  rooms: [küche, bad, badezimmer, wc, schlafzimmer, wohnzimmer, kinderzimmer, flur, keller, balkon, treppenhaus, kitchen, bathroom, bedroom, living room, hallway]
+
+# -----------------------------------------------------------------------------
+# 4) Dringlichkeit – Regeln setzen die UNTERGRENZE; die KI darf nur erhöhen
+# -----------------------------------------------------------------------------
+urgency:
+  levels:
+    NOTFALL:  { response_target: "sofort – Notdienst innerhalb von 2 Stunden", due_hours: 2 }
+    DRINGEND: { response_target: "Handwerker innerhalb von 24 Stunden", due_hours: 24 }
+    NORMAL:   { response_target: "innerhalb von 5 Werktagen", due_hours: 120 }
+  heating_season_months: [10, 11, 12, 1, 2, 3, 4]
+  rules:                        # erste passende Regel je Stufe zählt; die höchste Stufe gewinnt
+    - level: NOTFALL
+      label: Gasgeruch
+      any: [gasgeruch, "nach gas", "gas smell", "smell of gas", "smells of gas"]
+      safety: gas
+    - level: NOTFALL
+      label: Rohrbruch / Wasser läuft durch Decke oder steht
+      any: [rohrbruch, "rohr geplatzt", "burst pipe", "durch die decke", "through the ceiling", "wasser steht", "überschwemm", flooding, flooded]
+      safety: water
+    - level: NOTFALL
+      label: Wasser an Elektrik / Stromausfall
+      any: ["wasser in der steckdose", "wasser an der elektrik", kurzschluss, stromausfall, "power outage", "water in the socket"]
+      safety: electric
+    - level: NOTFALL
+      label: Heizungsausfall in der Heizperiode
+      any: ["heizung ausgefallen", "heizung geht nicht", "keine heizung", "heating not working", "no heating"]
+      only_in_heating_season: true
+    - level: DRINGEND
+      label: Wasser tritt aus (Schaden schreitet fort)
+      any: ["läuft wasser", "wasser läuft", "läuft aus", "tritt aus", "läuft unter", undicht, leck, "water leaking", "water is leaking", leaking, leak]
+    - level: DRINGEND
+      label: Folgeschaden sichtbar
+      any: [aufgequollen, durchfeuchtet, "feuchte wand", schimmel, swollen, mould, mold]
+    - level: DRINGEND
+      label: Kein Warmwasser / Heizung außerhalb der Heizperiode
+      any: ["kein warmwasser", "no hot water", "heizung ausgefallen", "heizung geht nicht", "keine heizung", "no heating"]
+  tenant_urgency_words: [dringend, sofort, schnellstmöglich, eilig, urgent, asap, immediately]
+  safety_instructions:
+    gas:
+      - "Kein Licht und keine elektrischen Schalter betätigen, kein offenes Feuer."
+      - "Fenster öffnen, Gebäude verlassen, Nachbarn warnen."
+      - "Von draußen den Gas-Notdienst des Versorgers oder 112 anrufen."
+    water:
+      - "Wenn möglich den Haupt-Wasserhahn bzw. das Eckventil zudrehen."
+      - "Elektrische Geräte in der Nähe des Wassers nicht berühren, ggf. Sicherung ausschalten."
+      - "Wasser mit Eimern/Tüchern auffangen und Fotos machen."
+    electric:
+      - "Betroffene Sicherung ausschalten, nichts Nasses berühren."
+      - "Bei Rauch, Brandgeruch oder Gefahr sofort 112 anrufen."
+
+# -----------------------------------------------------------------------------
+# 5) Bestehende Vorgänge
+# -----------------------------------------------------------------------------
+prior_cases:
+  related_categories:           # Schadenart -> verwandte frühere Vorgänge
+    Wasserschaden: [Wasserschaden, Rohrverstopfung, Rohrbruch, Sanitär]
+    Rohrbruch: [Wasserschaden, Rohrverstopfung, Rohrbruch]
+    Rohrverstopfung: [Rohrverstopfung, Wasserschaden]
+    Schimmel: [Wasserschaden, Schimmel, Fenster]
+    Heizungsausfall: [Heizungsausfall]
+    Gasgeruch: [Gasgeruch, Heizungsausfall]
+    Elektrik: [Elektrik]
+    Fenster/Türen: [Fenster, Fenster/Türen]
