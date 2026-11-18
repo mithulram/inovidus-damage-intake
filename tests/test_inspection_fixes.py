@@ -421,3 +421,13 @@ def test_contact_state_consistent_after_reassignment(client):
                                              "contract_id": "MV-10245", "reason": "doch Max"}).json()
     assert back["match"]["unknown_sender"] is False and back["staff_options"] == []
     assert "Nicht von der registrierten E-Mail-Adresse" not in back["warnings"]
+
+
+@pytest.mark.parametrize("body,street", [
+    ("Hilfe Musterstraße 12 2. OG li. Max Mustermann", "Musterstraße"),
+    ("Adresse: Musterstraße 12, 2. OG links. Max Mustermann", "Musterstraße"),
+    ("Alte Musterstraße 12, 2. OG links. Max Mustermann", "Alte Musterstraße"),
+])
+def test_street_prefix_stoplist(body, street):
+    from intake.providers.offline import OfflineProvider
+    assert OfflineProvider().understand(InboundEmail(subject="x", body=body), RULES).extraction.street_raw == street

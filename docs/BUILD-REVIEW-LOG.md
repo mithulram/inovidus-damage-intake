@@ -38,3 +38,7 @@ R5-01 "Vielleicht Musterstr. 12" kept only "Vielleicht" → building not marked 
 ## Inspection 6 – full build (by Codex, fresh session, 239 s) – **Score 7/10, 5 findings**
 R6-01 "Musterstr. 12; ich bin unsicher" still allowed a building action · R6-02 after a human action + rule change the case could not be re-processed · R6-03 an identical newer run did not advance the generation watermark · R6-04 staff options kept the original contract's phone after manual reassignment · R6-05 effort report ended before the night session.
 - Claude fixed all five: building doubt is now **fail-safe** (any location doubt blocks building actions unless it clearly concerns only floor/side – no longer dependent on recognising each phrasing); audited re-processing supersedes the proposal and voids earlier approvals; generation watermark; staff options regenerated for the approved contract; effort report split into calendar span, waiting time, active time and core. 593 tests, browser flows re-checked.
+
+## Inspection 7 – full build (by Codex, fresh session, 249 s) – **Score 8/10, 2 findings**
+R7-01 "Alte Musterstraße 12" was read as "Musterstraße 12" → could become a wrong READY_FOR_APPROVAL · R7-02 after reassignment the unknown-sender flag and staff options could disagree.
+- Codex fixed R7-01 (WO7: multi-word street names; Claude added opener words like "Hilfe"/"Notfall" to the stoplist with tests). Claude fixed R7-02 (one consistent contact state for the approved contract, both directions tested). 637 tests.

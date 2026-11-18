@@ -13,7 +13,7 @@ _NAME = rf"{_NAME_WORD}(?:[ \t]+{_NAME_WORD}){{1,3}}"
 # Prefixes are case-sensitive even though street suffixes are not. Keep unknown
 # capitalized words: truncation could turn a different street into an ERP match.
 _STREET_PREFIX = (
-    r"(?-i:(?!(?i:Wir|In|Der|Die|Das|Ich|Hallo|Bitte|Außerdem)\b)[A-ZÄÖÜ][\w-]*)[ \t]+"
+    r"(?-i:(?!(?i:Wir|In|Der|Die|Das|Ich|Hallo|Bitte|Außerdem|Hilfe|Notfall|Achtung|Dringend|Adresse|Anschrift|Wohnung|Unsere|Meine|Hello|Hi|Help|Urgent|We|Address)\b)[A-ZÄÖÜ][\w-]*)[ \t]+"
 )
 _ADDRESS = re.compile(
     rf"\b(?P<street>(?:{_STREET_PREFIX}){{0,2}}"
