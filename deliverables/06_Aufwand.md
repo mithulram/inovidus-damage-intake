@@ -23,7 +23,7 @@ Der Kern lag damit **deutlich unter 90 Minuten**. Meine eigene Zeit zum Lesen un
 19:08 bis ca. 22:00 = **ca. 2 Stunden 50 Minuten**. Darin enthalten (alles als **Extra** im Timelog markiert):
 - meine Entscheidungen zu offenen Fragen und die Installation der Design-Werkzeuge (19:21–20:07),
 - Groq-Anbindung, API, Oberfläche, n8n-Workflow, Bildschirmfotos,
-- drei unabhängige Code-Prüfungen durch Codex und die Korrekturen,
+- vier unabhängige Code-Prüfungen durch Codex und die Korrekturen,
 - Unterlagen und Beispiele.
 
 Weil Claude und Codex teilweise gleichzeitig gearbeitet haben, ist die Summe der einzelnen Timelog-Zeilen größer als dieser Zeitraum.
