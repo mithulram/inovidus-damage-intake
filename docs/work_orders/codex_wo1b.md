@@ -1,0 +1,6 @@
+# WO1b – tests for WO1 (Codex)
+
+Context: WO1 implementation is committed (HEAD). Write ONLY tests; do not change src/ or config/. If a test reveals a real defect against docs/work_orders/codex_wo1.md, do not fix it – list it in your final answer with file:line.
+
+Add the six test files from the work order (test_offline_provider, test_urgency, test_prior_cases, test_draft_task, test_actions, test_scenarios) with assertions that express the work-order rules (not just current behaviour), including: privacy of non-ready replies (no contract ids / ERP unit labels / ERP names), no prior cases in replies, stricter-wins urgency (LLM hint can raise, never lower), heating-season rule depends on received_at month, staff options availability (call_tenant only with a known phone), object-scope task for NOTFALL + NEEDS_REVIEW with known building, action handler refusals (wrong case_id, OUT_OF_SCOPE, contract not a candidate, order_contractor before approve_assignment, missing reason in NEEDS_REVIEW) and acceptance, audit JSONL written to an injected temp path, and no smtplib/email.mime imports or send functions in src/.
+Then run the proof: `uv run pytest && uv run intake-scenarios`. Do not commit.
