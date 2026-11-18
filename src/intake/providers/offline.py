@@ -15,8 +15,8 @@ _ADDRESS = re.compile(
     r"\s*(?P<number>\d+(?:[ \t]?[a-z])?)\b", re.IGNORECASE,
 )
 _LOCATION_REFERENCE = re.compile(
-    r"\b(?:Etage|Stockwerk|Stock|Geschoss|Hausnummer|Hausnr\.?|Adresse|Anschrift|"
-    r"Straße|Strasse|Wohnungsseite|floor|address|street|house\s+number|apartment\s+side)\b",
+    r"\b(?:Etage|Stockwerk|Stock|Geschoss|Obergeschoss|Hausnummer|Hausnr\.?|Haus|Adresse|Anschrift|"
+    r"Straße|Strasse|Str\.?|Wohnungsseite|floor|address|street|house\s+number|apartment\s+side)(?!\w)",
     re.IGNORECASE,
 )
 
@@ -68,6 +68,31 @@ def _location_alternatives(
         return re.search(r"[.!?]", text[first.end():last.start()]) is None
 
     spans = []
+    # An omitted street still describes a different building. Keep the number
+    # verbatim so the matcher can recognise it as address uncertainty.
+    for address in addresses:
+        end = address.end()
+        seen_numbers = {normalize_house_no(address.group("number"))}
+        source_end = body_end if address.start() < body_end else len(text)
+        while alternative := re.match(
+            r"\s*(?:oder\b|/)\s*(?P<number>\d+(?:[ \t]?[a-z])?)\b",
+            text[end:source_end], re.IGNORECASE,
+        ):
+            start, stop = alternative.span("number")
+            number = normalize_house_no(alternative.group("number"))
+            if number not in seen_numbers:
+                spans.append((end + start, end + stop))
+            seen_numbers.add(number)
+            end += alternative.end()
+    # In "2. oder 3. OG" only the second floor has a complete suffix.
+    # Both choices must survive as literal spans, without inventing "2. OG".
+    for floor in floors:
+        source_start = 0 if floor.start() < body_end else body_end + 1
+        prefix = re.search(r"\b(?P<first>\d+\s*\.)\s*(?:oder\b|/)\s*$",
+                           text[source_start:floor.start()], re.IGNORECASE)
+        if prefix and int(prefix.group("first").rstrip(". ")) != floor_key(floor):
+            spans.append((source_start + prefix.start("first"), source_start + prefix.end("first")))
+            spans.append(floor.span())
     for matches, key in (
         (addresses, lambda m: (normalize_street(m.group("street")), normalize_house_no(m.group("number")))),
         (floors, floor_key),
@@ -88,6 +113,26 @@ def _location_alternatives(
             seen.add(value)
     locations = addresses + floors + sides
     references = list(_LOCATION_REFERENCE.finditer(text))
+
+    def referring_clause(marker: re.Match) -> tuple[int, int]:
+        start, end = (0, body_end) if marker.start() < body_end else (body_end + 1, len(text))
+        clause_start = start
+        for boundary in re.finditer(r"[.;!?]", text[start:end]):
+            pos = start + boundary.start()
+            if text[pos] == "." and any(m.start() <= pos < m.end() for m in locations + references):
+                continue
+            if pos < marker.start():
+                clause_start = pos + 1
+            else:
+                end = pos
+                break
+        start = clause_start
+        while start < end and text[start].isspace():
+            start += 1
+        while end > start and text[end - 1].isspace():
+            end -= 1
+        return start, end
+
     for marker in re.finditer(
         r"\b(?:unsicher|wei(?:ß|ss)\s+(?:ich\s+)?nicht\s+genau|glaube|vielleicht|not\s+sure|maybe|I\s+think)\b",
         text, re.IGNORECASE,
@@ -100,18 +145,16 @@ def _location_alternatives(
                             and (m.start() < body_end) == (marker.start() < body_end)
                             for m in locations + references)):
             continue
+        # Prefer the whole explicit referring clause over a nearby bare marker:
+        # "bei der Hausnummer bin ich unsicher" must retain building evidence.
+        start, end = referring_clause(marker)
+        if any(start <= reference.start() and reference.end() <= end
+               and _near(reference, marker) for reference in references):
+            spans.append((start, end))
         # Line breaks inside a location are fine; body and subject are separate sources.
-        if any(_near(m, marker) and same_sentence(m, marker)
+        elif any(_near(m, marker) and same_sentence(m, marker)
                and (m.start() < body_end) == (marker.start() < body_end) for m in locations):
             spans.append(marker.span())
-        else:
-            # A separate sentence can refer back to the location explicitly.
-            # Keep the reference too, so e.g. Hausnummer remains building evidence.
-            for reference in references:
-                if (_near(reference, marker) and same_sentence(reference, marker)
-                        and (reference.start() < body_end) == (marker.start() < body_end)):
-                    spans.append((min(reference.start(), marker.start()),
-                                  max(reference.end(), marker.end())))
     # Avoid repeating a side that is already included in an alternative floor.
     return list(dict.fromkeys(text[start:end] for start, end in sorted(set(spans))
                               if not any(a <= start and end <= b and (a, b) != (start, end)
