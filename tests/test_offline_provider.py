@@ -4,6 +4,7 @@ import socket
 
 import pytest
 
+from intake.actions import Approval, AuditLog, execute
 from intake.context import Context
 from intake.models import Gate, InboundEmail, MessageType, Status, Urgency
 from intake.normalize import normalize_floor, normalize_side
@@ -64,6 +65,51 @@ def test_address_is_copied_as_written(rules, street, number, separator):
     result = OfflineProvider().understand(InboundEmail(body=f"Wasser bei {street}{separator}{number}, 2. OG links."), rules)
     assert result.extraction.street_raw == street
     assert result.extraction.house_no == number
+
+
+@pytest.mark.parametrize("address,street", [
+    ("Alte Musterstraße 12", "Alte Musterstraße"),
+    ("Am Alten Musterweg 12", "Am Alten Musterweg"),
+    ("Karl-Marx-Straße 5", "Karl-Marx-Straße"),
+    ("Unbekannte Musterstraße 12", "Unbekannte Musterstraße"),
+    ("Weitere Am Alten Musterweg 12", "Am Alten Musterweg"),
+    ("Alte\tMusterstraße 12", "Alte\tMusterstraße"),
+    ("alte Musterstraße 12", "Musterstraße"),
+])
+def test_street_keeps_up_to_two_capitalized_prefix_words(rules, address, street):
+    extraction = OfflineProvider().understand(InboundEmail(body=address), rules).extraction
+    assert extraction.street_raw == street
+    assert extraction.house_no == address.rsplit(" ", 1)[1]
+
+
+@pytest.mark.parametrize("prefix", ["Wir", "In", "Der", "Die", "Das", "Ich", "Hallo", "Bitte", "Außerdem",
+                                    "in der"])
+@pytest.mark.parametrize("street", ["Musterstr.", "Alte Musterstraße", "Am Alten Musterweg"])
+def test_sentence_words_are_excluded_from_street_prefix(rules, prefix, street):
+    extraction = OfflineProvider().understand(InboundEmail(body=f"{prefix} {street} 12"), rules).extraction
+    assert extraction.street_raw == street
+    assert extraction.house_no == "12"
+
+
+@pytest.mark.parametrize("address,street", [
+    ("Alte Musterstraße 12", "Alte Musterstraße"),
+    ("Am Alten Musterweg 12", "Am Alten Musterweg"),
+    ("Karl-Marx-Straße 5", "Karl-Marx-Straße"),
+])
+def test_different_multiword_street_vetoes_contract_and_object_action(address, street, tmp_path):
+    email = InboundEmail(body=f"Wasser läuft aus. {address}, 2. OG links. Viele Grüße, Max Mustermann")
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.street_raw == street
+    assert case.status == Status.NEEDS_REVIEW
+    assert Gate.VETO_ADDRESS in case.match.failed_gates
+    assert case.match.selected_contract is None
+    assert case.match.object_id is None
+    assert case.internal_task.scope == "clarification"
+    assert case.internal_task.object_id is None
+    audit = AuditLog(tmp_path / "actions.jsonl")
+    with pytest.raises(PermissionError, match="Gebäudeaktion"):
+        execute(case, Approval(case_id=case.case_id, actor="Test", action="object_action"), audit)
+    assert not audit.path.exists()
 
 
 @pytest.mark.parametrize("phrase,floor,status", [
@@ -273,6 +319,9 @@ def test_original_and_rent_scenarios_are_preserved(filename, status):
     assert all(c.passed for c in checks)
     assert case.status == status
     assert case.understanding.extraction.location_alternatives == []
+    if filename == "S01_original.yaml":
+        assert case.understanding.extraction.street_raw == "Musterstr."
+        assert case.match.selected_contract == "MV-10245"
 
 
 @pytest.mark.parametrize("room,expected", [("Küche", "Küche"), ("KÜCHE", "KÜCHE"), ("küche", "küche"),

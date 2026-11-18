@@ -10,8 +10,14 @@ from ..rules import Rules
 
 _NAME_WORD = r"(?:[A-ZÄÖÜ][a-zäöüßéèáà'-]+|[A-ZÄÖÜ]\.)"
 _NAME = rf"{_NAME_WORD}(?:[ \t]+{_NAME_WORD}){{1,3}}"
+# Prefixes are case-sensitive even though street suffixes are not. Keep unknown
+# capitalized words: truncation could turn a different street into an ERP match.
+_STREET_PREFIX = (
+    r"(?-i:(?!(?i:Wir|In|Der|Die|Das|Ich|Hallo|Bitte|Außerdem)\b)[A-ZÄÖÜ][\w-]*)[ \t]+"
+)
 _ADDRESS = re.compile(
-    r"\b(?P<street>[A-ZÄÖÜa-zäöüß][\w-]*?(?:straße|strasse|str\.?|weg|platz|allee|gasse|ring))"
+    rf"\b(?P<street>(?:{_STREET_PREFIX}){{0,2}}"
+    r"[A-ZÄÖÜa-zäöüß][\w-]*?(?:straße|strasse|str\.?|weg|platz|allee|gasse|ring))"
     r"\s*(?P<number>\d+(?:[ \t]?[a-z])?)\b", re.IGNORECASE,
 )
 _LOCATION_REFERENCE = re.compile(
