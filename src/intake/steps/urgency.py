@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..context import Context
 from ..models import CaseRecord, Urgency, UrgencyResult
 from ..normalize import fold
+from ..rule_checks import matched_urgency_rules
 
 
 def run(case: CaseRecord, ctx: Context) -> CaseRecord:
@@ -13,10 +14,7 @@ def run(case: CaseRecord, ctx: Context) -> CaseRecord:
     case = case.model_copy(deep=True)
     text = fold(f"{case.input.subject}\n{case.input.body}")
     cfg = ctx.rules.urgency
-    month = (case.input.received_at or case.received_at).month
-    matched = [r for r in cfg.rules
-               if (not r.only_in_heating_season or month in cfg.heating_season_months)
-               and any(fold(k) in text for k in r.any)]
+    matched = matched_urgency_rules(case, ctx.rules)
     rule_level = Urgency.max(*(r.level for r in matched))
     llm_level = case.understanding.urgency_hint
     level = Urgency.max(rule_level, llm_level)

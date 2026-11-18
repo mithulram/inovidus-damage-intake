@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..context import Context
 from ..matching import match as match_contracts
 from ..models import CaseRecord, Flag, Gate, MessageType, Status
+from ..rule_checks import is_rule_emergency
 
 
 def run(case: CaseRecord, ctx: Context) -> CaseRecord:
@@ -12,6 +13,11 @@ def run(case: CaseRecord, ctx: Context) -> CaseRecord:
         raise ValueError("Schritt 'match' braucht das Ergebnis von 'understand'")
     case = case.model_copy(deep=True)
     result = match_contracts(case.understanding.extraction, case.input, ctx.erp, ctx.rules)
+
+    if case.understanding.classification.type != MessageType.SCHADENMELDUNG and is_rule_emergency(case, ctx.rules):
+        # Safety first: whatever the reader said, a rule-recognised emergency is handled as damage.
+        case.understanding.classification.type = MessageType.SCHADENMELDUNG
+        case.warnings.append("Notfall-Regel greift – als Schadenmeldung behandelt, obwohl der Leser es anders eingestuft hat")
 
     if case.understanding.classification.type != MessageType.SCHADENMELDUNG:
         # Not a damage report: keep the (informational) tenant match for routing, but no action.

@@ -65,15 +65,15 @@ def execute(case: CaseRecord, approval: Approval, audit: AuditLog) -> CaseRecord
         if ((case.status == Status.NEEDS_REVIEW or approval.contract_id != case.match.selected_contract)
                 and not approval.reason):
             raise PermissionError("Manuelle Zuordnung braucht eine Begründung")
-        if action == "order_contractor" and not any(
-            event.event == "approve_assignment"
-            and event.details.get("case_id") == case.case_id
-            and event.details.get("contract_id") == approval.contract_id
-            for event in case.audit
-        ):
-            raise PermissionError("Handwerkerauftrag braucht eine vorherige Zuordnungsfreigabe für diesen Vertrag")
+        if action == "order_contractor":
+            current = [e for e in case.audit if e.event == "approve_assignment" and e.actor != "system"
+                       and e.details.get("case_id") == case.case_id]
+            if (not current or current[-1].details.get("contract_id") != approval.contract_id
+                    or case.match.approved_contract != approval.contract_id):
+                raise PermissionError("Handwerkerauftrag braucht die vorherige Zuordnungsfreigabe – aktuell und für genau diesen Vertrag")
     elif action == "object_action":
-        if case.status == Status.OUT_OF_SCOPE or not case.match.object_id or approval.contract_id is not None:
+        if (case.status == Status.OUT_OF_SCOPE or not case.match.object_id or approval.contract_id is not None
+                or case.match.building_uncertain):
             raise PermissionError("Gebäudeaktion braucht eine sichere Objektzuordnung, ohne Vertragsbezug")
         details["object_id"] = case.match.object_id
     elif action == "approve_reply":
@@ -89,6 +89,8 @@ def execute(case: CaseRecord, approval: Approval, audit: AuditLog) -> CaseRecord
         details["detail"] = option.detail
     event = AuditEvent(ts=approval.ts, actor=approval.actor, event=action, details=details)
     result = case.model_copy(deep=True)
+    if action == "approve_assignment":
+        result.match.approved_contract = approval.contract_id  # the current, human-approved contract
     # Persist before returning the changed case; a failed write must not look successful.
     audit.append(event)
     result.audit.append(event)

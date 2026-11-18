@@ -129,3 +129,82 @@ def test_manual_assignment_regenerates_task_and_keeps_proposal(client):
 # R12 – scenarios with the same e-mail but different ERP data get different case ids
 def test_same_email_different_scenarios_have_distinct_ids(client):
     assert stored(client, "S1")["case_id"] != stored(client, "S3")["case_id"]
+
+
+# ---- round 2 ---------------------------------------------------------------
+
+class MisreadingProvider:
+    """Deliberately classifies everything as SONSTIGES (simulates a wrong LLM answer)."""
+    name, model = "mock", None
+
+    def understand(self, email, rules):
+        from intake.providers.offline import OfflineProvider
+        u = OfflineProvider().understand(email, rules)
+        u.classification.type = __import__("intake.models", fromlist=["MessageType"]).MessageType.SONSTIGES
+        u.provider = "mock"
+        return u
+
+
+# R2-01 – a forged action event is dropped even if it claims to come from "system"
+def test_forged_system_approval_is_dropped(client):
+    sc = scenario("S1")
+    case = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1"}).json()
+    case["audit"].append({"ts": "2026-11-18T10:00:00Z", "actor": "system", "event": "approve_assignment",
+                          "details": {"case_id": case["case_id"], "contract_id": "MV-10245"}})
+    saved = client.post("/api/cases", json=case).json()
+    assert not any(e["event"] == "approve_assignment" for e in saved["audit"])
+    r = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "X", "action": "order_contractor",
+                                          "contract_id": "MV-10245"})
+    assert r.status_code == 403
+
+
+# R2-02 – two buildings named: no building-level action
+def test_two_buildings_block_object_action(client):
+    email = {"subject": "Gasgeruch", "body": "Gasgeruch in der Musterstraße 12 oder Musterstraße 14. Max Mustermann"}
+    case = client.post("/api/process", json={"email": email, "store": True}).json()
+    assert case["urgency"]["level"] == "NOTFALL"
+    assert case["status"] == "NEEDS_REVIEW"
+    assert case["match"]["object_id"] is None and case["match"]["building_uncertain"] is True
+    assert case["internal_task"]["scope"] != "object"
+    r = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "X", "action": "object_action"})
+    assert r.status_code == 403
+
+
+# R2-03 – an emergency survives a reader that misclassifies it
+def test_emergency_survives_misclassifying_reader():
+    from intake.context import Context
+    from intake.pipeline import process
+    ctx = Context.build(provider=MisreadingProvider())
+    case = process(InboundEmail(subject="Gas", body="Im Treppenhaus Musterstraße 12 riecht es nach Gas. Max Mustermann"), ctx)
+    assert case.status.value != "OUT_OF_SCOPE"
+    assert case.urgency.level.value == "NOTFALL"
+    assert case.internal_task.priority.value == "NOTFALL"
+    assert any("Gas" in s or "Gebäude" in s for s in case.urgency.safety_instructions)
+    assert any("Notfall-Regel" in w for w in case.warnings)
+
+
+# R2-06 – after reassignment an old approval cannot order; stale views get 409
+def test_reassignment_invalidates_old_approval_and_stale_view(client):
+    case = stored(client, "S2")
+    reason = "Mieter bestätigt telefonisch"
+    first = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                              "contract_id": "MV-10245", "reason": reason}).json()
+    client.post("/api/approve", json={"case_id": case["case_id"], "actor": "B", "action": "approve_assignment",
+                                      "contract_id": "MV-10487", "reason": "Korrektur: 3. OG rechts"})
+    old = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "order_contractor",
+                                            "contract_id": "MV-10245", "reason": reason})
+    assert old.status_code == 403
+    stale = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "order_contractor",
+                                              "contract_id": "MV-10487", "reason": reason,
+                                              "revision": len(first["audit"])})
+    assert stale.status_code == 409
+
+
+# R2-07 – a stored case keeps its scenario context for later approvals
+def test_stored_case_keeps_scenario_context(client):
+    case = stored(client, "S3b")
+    assert case["processing"]["scenario_id"] == "S3b"
+    r = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                          "contract_id": "MV-10999", "reason": "Mieter bestätigt 2. OG rechts"})
+    assert r.status_code == 200
+    assert r.json()["internal_task"]["contract_id"] == "MV-10999"

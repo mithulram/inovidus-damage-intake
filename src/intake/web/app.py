@@ -45,9 +45,13 @@ class StepRequest(RequestModel):
     scenario_id: str | None = None
 
 
+ACTION_EVENTS = {"approve_assignment", "order_contractor", "object_action", "approve_reply", "choose_staff_option"}
+
+
 class ApproveRequest(Approval):
     option: str | None = None
-    scenario_id: str | None = None  # demo only: same ERP overrides as when the case was processed
+    scenario_id: str | None = None  # ignored: the stored case remembers its own processing context
+    revision: int | None = None     # number of audit events the client saw; mismatch = stale view
 
 
 def _context(provider: str | None = None, scenario_id: str | None = None) -> Context:
@@ -88,9 +92,10 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             return _store_case(case)
 
     def _store_case(case: CaseRecord) -> CaseRecord:
-        # Approval history is server-owned: human events in a submitted case are never trusted.
+        # Approval history is server-owned: no action event in a submitted case is ever trusted,
+        # whoever it claims as actor. Only pipeline bookkeeping (eingegangen, schritt:*) is kept.
         case = case.model_copy(deep=True)
-        case.audit = [e for e in case.audit if e.actor == "system"]
+        case.audit = [e for e in case.audit if e.actor == "system" and e.event not in ACTION_EVENTS]
         if case.match is not None:
             case.match.approved_contract = None
         try:
@@ -178,23 +183,32 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
 
     @app.post("/api/approve", response_model=CaseRecord)
     def approve(body: ApproveRequest):
-        approval = Approval.model_validate(body.model_dump(exclude={"option", "scenario_id"}))
+        approval = Approval.model_validate(body.model_dump(exclude={"option", "scenario_id", "revision"}))
         if body.action == "choose_staff_option" and body.option is not None:
             approval.reason = body.option
         with lock:
             case = get_case(body.case_id)
-            ctx = _context(scenario_id=body.scenario_id)
+            if body.revision is not None and body.revision != len(case.audit):
+                raise HTTPException(409, "Der Vorgang wurde inzwischen geändert – bitte neu laden und erneut prüfen.")
+            ctx = _context(scenario_id=case.processing.scenario_id)
             if body.action == "choose_staff_option" and approval.reason in {"ask_registered_email", "reply_anyway"}:
                 # the reply the staff member will approve and copy is stored on the case itself
                 variant = "ask_registered_email" if approval.reason == "ask_registered_email" else None
                 case = case.model_copy(deep=True)
                 case.reply_draft = render_reply(case, ctx, variant=variant)
+            if body.action == "approve_assignment" and approval.contract_id:
+                # Validate and regenerate BEFORE anything is audited: a failure leaves no trace of success.
+                try:
+                    actions.execute(case, approval, AuditLog(os.devnull))  # dry run of the permission checks
+                except PermissionError as exc:
+                    raise HTTPException(403, str(exc)) from None
+                if ctx.erp.contract(approval.contract_id) is None:
+                    raise HTTPException(422, "Vertrag ist im ERP nicht vorhanden")
+                case = pipeline.apply_human_assignment(case, approval.contract_id, ctx)
             try:
                 case = actions.execute(case, approval, app.state.audit)
             except PermissionError as exc:
                 raise HTTPException(403, str(exc)) from None
-            if body.action == "approve_assignment" and approval.contract_id:
-                case = pipeline.apply_human_assignment(case, approval.contract_id, ctx)
             return app.state.store.save(case)
 
     @app.get("/api/audit")

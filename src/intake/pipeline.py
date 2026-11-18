@@ -24,6 +24,7 @@ def new_case(email: InboundEmail, ctx: Context, scenario_id: str | None = None) 
     short = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:6].upper()
     case = CaseRecord(case_id=f"SM-{received:%Y%m%d}-{short}", received_at=received, input=email)
     case.processing.rules_version = ctx.rules.version
+    case.processing.scenario_id = scenario_id
     case.audit.append(AuditEvent(ts=now, actor="system", event="eingegangen",
                                  details={"subject": email.subject, "sender": email.sender_email}))
     return case

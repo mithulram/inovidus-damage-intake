@@ -261,9 +261,8 @@ function houseGrid(c) {
   const inHouse = m.candidates.filter((x) => x.object_id === objectId);
   const units = inHouse.map((x) => ({ ...x, pos: parseUnit(x.unit_id) })).filter((x) => x.pos);
   const loc = m.location || {};
-  const floors = new Set(units.map((u) => u.pos.floor));
-  if (loc.floor != null && m.object_id === objectId) floors.add(loc.floor);
-  const maxF = Math.max(3, ...floors), sides = units.some((u) => u.pos.side === "M") ? ["L", "M", "R"] : ["L", "R"];
+  const erpMax = Math.min(30, Math.max(3, ...units.map((u) => u.pos.floor)));
+  const maxF = erpMax, sides = units.some((u) => u.pos.side === "M") ? ["L", "M", "R"] : ["L", "R"];
   const sideName = { L: "links", M: "Mitte", R: "rechts" };
   const addr = inHouse[0]?.unit_label?.split(",")[0] || objectId;
   let cells = `<span></span>${sides.map((s) => `<span class="colh">${sideName[s]}</span>`).join("")}`;
@@ -271,7 +270,7 @@ function houseGrid(c) {
     cells += `<span class="fl">${f === 0 ? "EG" : f + ". OG"}</span>`;
     for (const s of sides) {
       const here = units.filter((u) => u.pos.floor === f && u.pos.side === s);
-      const said = m.object_id === objectId && loc.floor === f && (loc.side == null || loc.side === s);
+      const said = m.object_id === objectId && Number.isInteger(loc.floor) && loc.floor === f && (loc.side == null || loc.side === s);
       const saidTag = said ? `<span class="said" title="Laut E-Mail">E-Mail</span>` : "";
       if (!here.length) { cells += `<div class="unit-cell empty">${saidTag}</div>`; continue; }
       const u = here[0];
@@ -394,7 +393,7 @@ function actionBar(c, ap) {
         <label class="label" style="grid-column:1/-1">Begründung (Pflicht)<textarea class="input" id="manual-reason" placeholder="z. B. Mieter hat telefonisch 2. OG links bestätigt"></textarea></label></div>`;
     right = `${replyBtn}<button class="btn primary" data-act="approve_assignment" data-manual="1">Zuordnung manuell freigeben</button>
       <span class="hint">Empfohlen: zuerst die Rückfrage an den Mieter senden.</span>`;
-    if (c.urgency?.level === "NOTFALL" && m.object_id && !ap.object) {
+    if (c.urgency?.level === "NOTFALL" && m.object_id && !m.building_uncertain && !ap.object) {
       right = `<button class="btn alarm primary" data-act="object_action">Notdienst zum Gebäude (simuliert)</button><span class="hint">Gebäude ist bekannt – das ist ohne Einheit erlaubt.</span>` + right;
     }
   }
@@ -490,6 +489,10 @@ async function adopt(cur, c) {
   return stored;
 }
 
+function approve(cur, body) {
+  return api("/api/approve", { ...body, case_id: cur.case.case_id, actor: state.actor, revision: (cur.case.audit || []).length });
+}
+
 async function act(btn) {
   const cur = state.current, c = cur.case, errEl = $("#act-err");
   errEl.textContent = "";
@@ -500,7 +503,7 @@ async function act(btn) {
   try {
     if (kind === "approve_reply") {
       await adopt(cur, c);
-      cur.case = await api("/api/approve", { case_id: cur.case.case_id, actor: state.actor, action: "approve_reply" });
+      cur.case = await approve(cur, { action: "approve_reply" });
       try { await navigator.clipboard.writeText(cur.case.reply_draft.body); toast("Entwurf freigegeben und kopiert – Versand bleibt bei Ihnen."); }
       catch { toast("Entwurf freigegeben. Kopieren nicht erlaubt – bitte Text markieren."); }
       renderCase();
@@ -510,30 +513,33 @@ async function act(btn) {
       const reason = manual ? $("#manual-reason").value.trim() : null;
       if (manual && !reason) { errEl.textContent = "Bitte eine Begründung angeben – sie steht später im Protokoll."; $("#manual-reason").focus(); return; }
       await adopt(cur, c);
-      cur.case = await api("/api/approve", { case_id: cur.case.case_id, actor: state.actor, action: "approve_assignment", contract_id: contract, reason, scenario_id: cur.scenario?.id });
+      cur.case = await approve(cur, { action: "approve_assignment", contract_id: contract, reason });
       toast(`Zuordnung ${contract} freigegeben.`);
       renderCase({ freshStamp: true });
     } else if (kind === "order_contractor") {
-      const a = approvals(c).assignment;
-      cur.case = await api("/api/approve", { case_id: c.case_id, actor: state.actor, action: "order_contractor", contract_id: a.details.contract_id, reason: a.details.reason, scenario_id: cur.scenario?.id });
+      await adopt(cur, c);
+      const a = approvals(cur.case).assignment;
+      cur.case = await approve(cur, { action: "order_contractor", contract_id: cur.case.match.approved_contract, reason: a?.details?.reason });
       toast("Handwerkerauftrag erfasst (simuliert).");
       renderCase();
     } else if (kind === "object_action") {
       await adopt(cur, c);
-      cur.case = await api("/api/approve", { case_id: cur.case.case_id, actor: state.actor, action: "object_action", reason: "Notfall im Gebäude", scenario_id: cur.scenario?.id });
+      cur.case = await approve(cur, { action: "object_action", reason: "Notfall im Gebäude" });
       toast("Notdienst für das Gebäude erfasst (simuliert).");
       renderCase();
     } else if (kind === "staff") {
       const option = btn.dataset.option;
       await adopt(cur, c);
-      cur.case = await api("/api/approve", { case_id: cur.case.case_id, actor: state.actor, action: "choose_staff_option", option, reason: option, scenario_id: cur.scenario?.id });
+      cur.case = await approve(cur, { action: "choose_staff_option", option, reason: option });
       if (option !== "call_tenant") state.sheet = "reply";
       toast(option === "call_tenant" ? "Anruf vorgemerkt." : "Option gewählt.");
       renderCase();
     }
     loadStore();
   } catch (e) {
-    errEl.textContent = e.status === 403 ? `Nicht erlaubt: ${e.message}` : `Fehler: ${e.message}`;
+    if (e.status === 409) { try { cur.case = await api(`/api/cases/${encodeURIComponent(c.case_id)}`); renderCase(); } catch { /* keep view */ } }
+    const el = $("#act-err");
+    if (el) el.textContent = e.status === 403 ? `Nicht erlaubt: ${e.message}` : e.status === 409 ? e.message : `Fehler: ${e.message}`;
   } finally {
     btn.classList.remove("loading"); btn.disabled = false;
   }

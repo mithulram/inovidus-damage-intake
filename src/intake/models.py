@@ -184,6 +184,7 @@ class MatchResult(Strict):
     flags: list[Flag] = Field(default_factory=list)
     object_id: str | None = Field(None, description="Gebäude, wenn die Adresse sicher ist")
     unknown_sender: bool = False
+    building_uncertain: bool = Field(False, description="E-Mail nennt mehrere/unsichere Gebäude – keine Gebäudeaktion")
     approved_contract: str | None = Field(None, description="Von einem Menschen freigegebener Vertrag (überschreibt nie den Vorschlag)")
     reason: str
 
@@ -270,6 +271,7 @@ class Processing(Strict):
     model: str | None = None
     rules_version: str | None = None
     fallback_used: bool = False
+    scenario_id: str | None = Field(None, description="Nur Demo: Testfall, dessen Daten-/Regeländerungen galten")
 
 
 # ---------------------------------------------------------------------------

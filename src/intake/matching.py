@@ -18,6 +18,8 @@ Nothing here acts on a contract. The result is a proposal for a human.
 
 from __future__ import annotations
 
+import re
+
 from rapidfuzz import fuzz
 
 from .erp import Contract, ERPConnector
@@ -216,9 +218,15 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
         fail(Gate.FLOOR_MISSING, loc.floor_note or "Etage fehlt oder ist unklar – beim Mieter nachfragen")
     if loc.floor_status == "english_ordinal" and rules.normalize.english_floor_counting == "ask":
         fail(Gate.FLOOR_AMBIGUOUS, f"Zählweise der Etage unklar: {loc.floor_note}")
+    building_uncertain = False
     if ext.location_alternatives:
         fail(Gate.UNIT_AMBIGUOUS, "E-Mail nennt mehrere oder unsichere Ortsangaben: "
                                   + "; ".join(ext.location_alternatives) + " – beim Mieter nachfragen")
+        street_word = re.compile(r"(str\.?|stra(ss|ß)e|weg|platz|allee|gasse|ring)\b|\b\d+\s*[a-z]?\s*$|adresse|address|haus",
+                                 re.IGNORECASE)
+        building_uncertain = any(street_word.search(alt) for alt in ext.location_alternatives)
+        if building_uncertain:
+            object_id = None
 
     # Stage A ---------------------------------------------------------------
     valid = [c for c in candidates if not c.vetoes]
@@ -281,5 +289,6 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
         flags=flags,
         object_id=object_id,
         unknown_sender=unknown_sender,
+        building_uncertain=building_uncertain,
         reason=reason,
     )
