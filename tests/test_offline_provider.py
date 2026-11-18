@@ -74,9 +74,14 @@ def test_address_is_copied_as_written(rules, street, number, separator):
     ("Unbekannte Musterstraße 12", "Unbekannte Musterstraße"),
     ("Weitere Am Alten Musterweg 12", "Am Alten Musterweg"),
     ("Alte\tMusterstraße 12", "Alte\tMusterstraße"),
-    ("alte Musterstraße 12", "Musterstraße"),
+    ("alte Musterstraße 12", "alte Musterstraße"),
+    ("Am alten Musterweg 3", "Am alten Musterweg"),
+    ("am alten Musterweg 3", "am alten Musterweg"),
+    ("sehr alte Musterstraße 12", "sehr alte Musterstraße"),
+    ("weitere sehr alte Musterstraße 12", "sehr alte Musterstraße"),
+    ("ALTE Musterstraße 12", "ALTE Musterstraße"),
 ])
-def test_street_keeps_up_to_two_capitalized_prefix_words(rules, address, street):
+def test_street_keeps_up_to_two_prefix_words_regardless_of_case(rules, address, street):
     extraction = OfflineProvider().understand(InboundEmail(body=address), rules).extraction
     assert extraction.street_raw == street
     assert extraction.house_no == address.rsplit(" ", 1)[1]
@@ -91,9 +96,26 @@ def test_sentence_words_are_excluded_from_street_prefix(rules, prefix, street):
     assert extraction.house_no == "12"
 
 
+@pytest.mark.parametrize("prefix", [
+    "der", "die", "das", "dem", "den", "in", "im", "am", "an", "auf", "zur", "zum", "bei", "von",
+    "wohnen", "wohne", "leben", "adresse", "anschrift", "hallo", "bitte", "hilfe", "notfall",
+    "we", "at", "live", "the",
+])
+@pytest.mark.parametrize("uppercase", [False, True])
+def test_function_words_before_bare_street_are_excluded_regardless_of_case(rules, prefix, uppercase):
+    prefix = prefix.upper() if uppercase else prefix
+    extraction = OfflineProvider().understand(
+        InboundEmail(body=f"{prefix} Musterstraße 12"), rules,
+    ).extraction
+    assert extraction.street_raw == "Musterstraße"
+    assert extraction.house_no == "12"
+
+
 @pytest.mark.parametrize("address,street", [
     ("Alte Musterstraße 12", "Alte Musterstraße"),
+    ("alte Musterstraße 12", "alte Musterstraße"),
     ("Am Alten Musterweg 12", "Am Alten Musterweg"),
+    ("Am alten Musterweg 3", "Am alten Musterweg"),
     ("Karl-Marx-Straße 5", "Karl-Marx-Straße"),
 ])
 def test_different_multiword_street_vetoes_contract_and_object_action(address, street, tmp_path):

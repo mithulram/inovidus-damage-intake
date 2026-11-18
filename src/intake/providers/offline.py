@@ -10,13 +10,18 @@ from ..rules import Rules
 
 _NAME_WORD = r"(?:[A-ZÄÖÜ][a-zäöüßéèáà'-]+|[A-ZÄÖÜ]\.)"
 _NAME = rf"{_NAME_WORD}(?:[ \t]+{_NAME_WORD}){{1,3}}"
-# Prefixes are case-sensitive even though street suffixes are not. Keep unknown
-# capitalized words: truncation could turn a different street into an ERP match.
+# Keep unknown prefix words regardless of case: truncation could turn a
+# different street into an ERP match. Function words delimit the street name.
 _STREET_PREFIX = (
-    r"(?-i:(?!(?i:Wir|In|Der|Die|Das|Ich|Hallo|Bitte|Außerdem|Hilfe|Notfall|Achtung|Dringend|Adresse|Anschrift|Wohnung|Unsere|Meine|Hello|Hi|Help|Urgent|We|Address)\b)[A-ZÄÖÜ][\w-]*)[ \t]+"
+    r"(?!(?:wir|ich|der|die|das|dem|den|in|im|am|an|auf|zur|zum|bei|von|"
+    r"wohnen|wohne|leben|adresse|anschrift|hallo|bitte|hilfe|notfall|außerdem|"
+    r"achtung|dringend|wohnung|unsere|meine|hello|hi|help|urgent|we|at|live|the|address)\b)"
+    r"[A-ZÄÖÜa-zäöüß][\w-]*[ \t]+"
 )
 _ADDRESS = re.compile(
-    rf"\b(?P<street>(?:{_STREET_PREFIX}){{0,2}}"
+    # "am" alone is a function word, but retain it before another prefix word
+    # in names such as "Am alten Musterweg". Capture at most two prefix words.
+    rf"\b(?P<street>(?:(?:am[ \t]+|{_STREET_PREFIX})?{_STREET_PREFIX})?"
     r"[A-ZÄÖÜa-zäöüß][\w-]*?(?:straße|strasse|str\.?|weg|platz|allee|gasse|ring))"
     r"\s*(?P<number>\d+(?:[ \t]?[a-z])?)\b", re.IGNORECASE,
 )
