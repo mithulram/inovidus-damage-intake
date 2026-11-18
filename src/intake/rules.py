@@ -94,6 +94,8 @@ class UrgencyRules(_M):
     # when a hazard's instructions are active, drop other instructions containing these words
     # (e.g. gas: never advise operating fuses or switches)
     safety_conflicts: dict[str, list[str]] = {}
+    # a hazard recognised by the reader (category) counts like a rule hit when the case is a NOTFALL
+    category_hazards: dict[str, str] = {}
 
 
 class PriorCaseRules(_M):

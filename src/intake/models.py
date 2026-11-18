@@ -272,6 +272,7 @@ class Processing(Strict):
     rules_version: str | None = None
     fallback_used: bool = False
     scenario_id: str | None = Field(None, description="Nur Demo: Testfall, dessen Daten-/Regeländerungen galten")
+    generation: int | None = Field(None, description="Server-Zeitstempel (ns) beim START der Verarbeitung – neuere Läufe gewinnen")
 
 
 # ---------------------------------------------------------------------------

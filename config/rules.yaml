@@ -100,7 +100,7 @@ urgency:
   rules:                        # erste passende Regel je Stufe zählt; die höchste Stufe gewinnt
     - level: NOTFALL
       label: Gasgeruch
-      any: [gasgeruch, "nach gas", "gas smell", "smell of gas", "smells of gas"]
+      any: [gasgeruch, "nach gas", erdgas, "gas smell", "smell of gas", "smells of gas"]
       safety: gas
     - level: NOTFALL
       label: Rohrbruch / Wasser läuft durch Decke oder steht
@@ -124,6 +124,10 @@ urgency:
       label: Kein Warmwasser / Heizung außerhalb der Heizperiode
       any: ["kein warmwasser", "no hot water", "heizung ausgefallen", "heizung geht nicht", "keine heizung", "no heating"]
   tenant_urgency_words: [dringend, sofort, schnellstmöglich, eilig, urgent, asap, immediately]
+  category_hazards:            # Schadenart (auch von der KI erkannt) -> Sicherheitshinweise bei NOTFALL
+    Gasgeruch: gas
+    Rohrbruch: water
+    Elektrik: electric
   safety_conflicts:            # Gas: keine Hinweise, die Schalter oder Sicherungen betätigen lassen
     gas: ["Sicherung", "Schalter"]
   safety_instructions:

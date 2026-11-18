@@ -486,7 +486,8 @@ async function adopt(cur, c) {
   let stored = await api(`/api/cases/${encodeURIComponent(c.case_id)}?allow_missing=true`);
   if (!stored) stored = await api("/api/cases", c);  // first action: put this proposal into the review inbox
   const humanCount = (x) => (x.audit || []).filter((e) => e.actor !== "system").length;
-  if (humanCount(stored) === 0 && c.processed_at && stored.processed_at && Date.parse(c.processed_at) > Date.parse(stored.processed_at)) {
+  const gen = (x) => x.processing?.generation ?? 0;
+  if (humanCount(stored) === 0 && gen(c) > gen(stored)) {
     stored = await api("/api/cases", c);  // this view is newer (e.g. rules changed) and nobody acted yet: refresh
   }
   // everything a person reads before approving: decision, evidence, reply text and task

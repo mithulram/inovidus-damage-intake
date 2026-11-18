@@ -19,6 +19,9 @@ def run(case: CaseRecord, ctx: Context) -> CaseRecord:
     llm_level = case.understanding.urgency_hint
     level = Urgency.max(rule_level, llm_level)
     hazards = list(dict.fromkeys(r.safety for r in matched if r.level == Urgency.NOTFALL and r.safety))
+    category_hazard = cfg.category_hazards.get(case.understanding.classification.category or "")
+    if level == Urgency.NOTFALL and category_hazard and category_hazard not in hazards:
+        hazards.append(category_hazard)  # e.g. the reader recognised gas in a phrasing the rules do not know
     hazards.sort(key=lambda h: h != "gas")  # gas advice always first
     safety: list[str] = []
     for hazard in hazards:

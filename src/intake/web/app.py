@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -105,11 +106,14 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
         if existing is not None:
             if any(e.actor != "system" for e in existing.audit):
                 return existing  # a human already acted on it: never overwrite
-            volatile = {"audit", "processed_at", "received_at"}
+            volatile = {"audit": True, "processed_at": True, "received_at": True, "processing": {"generation"}}
             if existing.model_dump(exclude=volatile) == case.model_dump(exclude=volatile):
                 return existing  # same result: idempotent
-            if existing.processed_at and (case.processed_at is None or case.processed_at <= existing.processed_at):
-                return existing  # an older/stale result never overwrites a newer one
+            old_gen, new_gen = existing.processing.generation, case.processing.generation
+            if old_gen is not None and (new_gen is None or new_gen <= old_gen):
+                return existing  # a run that STARTED earlier never overwrites a newer one, however late it finishes
+            if old_gen is None and existing.processed_at and (case.processed_at is None or case.processed_at <= existing.processed_at):
+                return existing
         case = case.model_copy(deep=True)
         label = "in Prüfliste übernommen" if existing is None else "neu verarbeitet (Regeln oder Leser geändert)"
         event = AuditEvent(ts=datetime.now(timezone.utc), actor="system", event=label,
@@ -141,7 +145,9 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
 
     @app.post("/api/process", response_model=CaseRecord)
     def process(body: ProcessRequest):
+        generation = time.time_ns()  # taken BEFORE the (possibly slow) reader runs
         case = pipeline.process(body.email, _context(body.provider, body.scenario_id), body.scenario_id)
+        case.processing.generation = generation
         return store_case(case) if body.store else case
 
     @app.post("/api/steps/{name}", response_model=CaseRecord)
@@ -154,6 +160,7 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             if name != "understand" or body.email is None:
                 raise HTTPException(422, "Vorgang fehlt; 'understand' braucht mindestens eine E-Mail")
             case = pipeline.new_case(body.email, ctx, body.scenario_id)
+            case.processing.generation = time.time_ns()
         try:
             return pipeline.run_step(name, case, ctx)
         except ValueError as exc:
@@ -198,6 +205,8 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             if body.revision is not None and body.revision != len(case.audit):
                 raise HTTPException(409, "Der Vorgang wurde inzwischen geändert – bitte neu laden und erneut prüfen.")
             ctx = _context(scenario_id=case.processing.scenario_id)
+            if case.processing.rules_version and case.processing.rules_version != ctx.rules.version:
+                raise HTTPException(409, "Die Regeln wurden seit der Verarbeitung geändert – bitte den Vorgang neu verarbeiten und erneut prüfen.")
             if body.action == "choose_staff_option" and approval.reason in {"ask_registered_email", "reply_anyway"}:
                 # the reply the staff member will approve and copy is stored on the case itself
                 variant = "ask_registered_email" if approval.reason == "ask_registered_email" else None

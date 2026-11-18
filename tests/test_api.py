@@ -16,7 +16,7 @@ from intake.store import CaseStore
 from intake.web.app import create_app
 
 SCENARIOS = load_scenarios()
-EXCLUDED = {"audit", "processed_at", "received_at"}
+EXCLUDED = {"audit": True, "processed_at": True, "received_at": True, "processing": {"generation"}}  # per-run stamps
 
 
 @pytest.fixture
@@ -226,7 +226,8 @@ def test_static_is_mounted_only_when_present_and_run_binds_locally(tmp_path, mon
 def test_restoring_a_changed_result_refreshes_until_a_human_acted(client):
     """Live rule changes must reach the review inbox; human-touched cases are frozen."""
     case = inbox(client)
-    changed = dict(case, warnings=[*case["warnings"], "Regel geändert"], processed_at="2099-01-01T00:00:00Z")
+    changed = dict(case, warnings=[*case["warnings"], "Regel geändert"], processed_at="2099-01-01T00:00:00Z",
+                   processing={**case["processing"], "generation": (case["processing"]["generation"] or 0) + 1})
     refreshed = client.post("/api/cases", json=changed).json()
     assert refreshed["warnings"][-1] == "Regel geändert"
     assert refreshed["audit"][-1]["event"].startswith("neu verarbeitet")

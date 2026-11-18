@@ -288,3 +288,54 @@ def test_anschrift_uncertainty_end_to_end(client):
     assert case["internal_task"]["scope"] != "object"
     r = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "X", "action": "object_action"})
     assert r.status_code == 403
+
+
+# ---- round 5 ---------------------------------------------------------------
+
+class GasReader(MisreadingProvider):
+    """Reader recognises gas (category + NOTFALL) in a phrasing the keyword rules may not know."""
+
+    def understand(self, email, rules):
+        from intake.models import MessageType, Urgency
+        u = super().understand(email, rules)
+        u.classification.type, u.classification.category = MessageType.SCHADENMELDUNG, "Gasgeruch"
+        u.urgency_hint = Urgency.NOTFALL
+        return u
+
+
+# R5-02 – gas recognised by the reader activates gas advice and suppresses fuse advice
+def test_reader_recognised_gas_drives_safety_advice():
+    from intake.context import Context
+    from intake.pipeline import process
+    case = process(InboundEmail(subject="Rohrbruch", body="Rohrbruch, Wasser kommt durch die Decke. Es müffelt komisch nach Leitung. Musterstraße 12, 2. OG links. Max Mustermann"),
+                   Context.build(provider=GasReader()))
+    s = case.urgency.safety_instructions
+    assert s[0] == RULES.urgency.safety_instructions["gas"][0]
+    assert not any("Sicherung" in x for x in s)
+
+
+# R5-03 – a run that started earlier never overwrites a newer stored result, however late it finishes
+def test_late_finishing_old_run_does_not_overwrite(client):
+    sc = scenario("S1")
+    old = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1"}).json()
+    new = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1"}).json()
+    new["warnings"] = [*new["warnings"], "neu"]
+    client.post("/api/cases", json=new)
+    old["processed_at"] = "2099-01-01T00:00:00Z"  # finished last
+    old["warnings"] = [*old["warnings"], "alt"]
+    kept = client.post("/api/cases", json=old).json()
+    assert "neu" in kept["warnings"] and "alt" not in kept["warnings"]
+
+
+# R5-03 – approving after the rules changed is refused (re-process first)
+def test_approval_refused_when_rules_changed(client):
+    case = stored(client, "S1")
+    from intake.web import app as app_module
+    stored_case = client.get(f"/api/cases/{case['case_id']}").json()
+    stored_case["processing"]["rules_version"] = "sha256:veraltet"
+    store = client.app.state.store
+    from intake.models import CaseRecord
+    store.save(CaseRecord.model_validate(stored_case))
+    r = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                          "contract_id": "MV-10245"})
+    assert r.status_code == 409 and "Regeln" in r.json()["detail"]
