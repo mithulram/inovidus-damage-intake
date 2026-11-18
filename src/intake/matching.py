@@ -97,9 +97,11 @@ def _score_contract(
             signals.append(Signal(name="address", result="match", weight=w.address, points=w.address, email_value=email_addr,
                                   erp_value=erp_addr, reason=f"Adresse stimmt überein ('{email_addr}' = '{erp_addr}')"))
         elif street_ok and house_ok:
-            signals.append(Signal(name="address", result="partial", weight=w.address, points=round(w.address / 2, 4),
+            # Plan §5.2: the address counts only as street + number; incomplete = missing (0 points, no veto).
+            missing_part = "Hausnummer" if not loc.house_no else "Straße"
+            signals.append(Signal(name="address", result="missing", weight=w.address, points=0,
                                   email_value=email_addr, erp_value=erp_addr,
-                                  reason="Adresse nur teilweise angegeben"))
+                                  reason=f"Adresse unvollständig ({missing_part} fehlt) – zählt nicht"))
         else:
             what = "Straße" if not street_ok else "Hausnummer"
             msg = f"Adresse widerspricht: {what} ('{email_addr}' ≠ '{erp_addr}')"

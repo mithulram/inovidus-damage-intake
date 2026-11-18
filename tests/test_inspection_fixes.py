@@ -431,3 +431,15 @@ def test_contact_state_consistent_after_reassignment(client):
 def test_street_prefix_stoplist(body, street):
     from intake.providers.offline import OfflineProvider
     assert OfflineProvider().understand(InboundEmail(subject="x", body=body), RULES).extraction.street_raw == street
+
+
+# ---- round 8 ---------------------------------------------------------------
+
+# R8-02 – an incomplete address earns no points (street without number cannot reach the threshold)
+@pytest.mark.parametrize("street,house", [("Musterstraße", None), (None, "12")])
+def test_incomplete_address_scores_zero(street, house):
+    r = match(ext(street_raw=street, house_no=house), InboundEmail(body="x", sender_email="max.mustermann@example.org"),
+              JsonERP(), RULES)
+    win = next(c for c in r.candidates if c.contract_id == "MV-10245")
+    assert next(s for s in win.signals if s.name == "address").points == 0
+    assert r.selected_contract is None and "threshold" in {g.value for g in r.failed_gates}
