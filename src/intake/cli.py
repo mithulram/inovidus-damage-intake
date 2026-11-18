@@ -11,6 +11,9 @@ from .scenarios import load_scenario, main as scenarios_main, run_scenario
 
 
 def main(argv: list[str] | None = None) -> None:
+    from .env import load_dotenv
+
+    load_dotenv()
     parser = argparse.ArgumentParser(description="Schadenmeldung lokal verarbeiten")
     commands = parser.add_subparsers(dest="command", required=True)
     process_parser = commands.add_parser("process", help="E-Mail-Datei verarbeiten")

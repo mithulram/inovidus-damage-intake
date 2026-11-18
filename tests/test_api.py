@@ -78,6 +78,7 @@ def test_health_rules_scenarios_and_same_origin(client):
     for actual, expected in zip(scenarios, SCENARIOS):
         assert actual == {"id": expected.id, "title": expected.title, "description": expected.description,
                           "email": expected.email.model_dump(mode="json"), "expected": expected.expected,
+                          "rule_overrides": expected.rule_overrides or {},
                           "has_overrides": bool(expected.rule_overrides or expected.data_overrides)}
     assert "hint" in client.get("/").json()
     response = client.get("/api/health", headers={"Origin": "https://foreign.example"})
@@ -94,7 +95,8 @@ def test_case_round_trip_is_idempotent_and_reply_is_read_only(client):
     # FastAPI and Pydantic use equivalent ISO UTC spellings (+00:00 / Z).
     summary["received_at"] = datetime.fromisoformat(summary["received_at"])
     assert summary == {"case_id": case["case_id"], "received_at": datetime.fromisoformat(case["received_at"]),
-                       "subject": case["input"]["subject"], "status": case["status"],
+                       "subject": case["input"]["subject"], "sender": case["input"]["sender_email"],
+                       "status": case["status"],
                        "urgency": case["urgency"]["level"], "winner": case["match"]["winner"],
                        "selected_contract": case["match"]["selected_contract"],
                        "failed_gates": case["match"]["failed_gates"]}
@@ -219,3 +221,16 @@ def test_static_is_mounted_only_when_present_and_run_binds_locally(tmp_path, mon
     monkeypatch.setenv("INTAKE_PORT", "8123")
     module.run()
     assert calls == [{"host": "127.0.0.1", "port": 8000}, {"host": "127.0.0.1", "port": 8123}]
+
+
+def test_restoring_a_changed_result_refreshes_until_a_human_acted(client):
+    """Live rule changes must reach the review inbox; human-touched cases are frozen."""
+    case = inbox(client)
+    changed = dict(case, warnings=[*case["warnings"], "Regel geändert"])
+    refreshed = client.post("/api/cases", json=changed).json()
+    assert refreshed["warnings"][-1] == "Regel geändert"
+    assert refreshed["audit"][-1]["event"].startswith("neu verarbeitet")
+    approved = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "Test",
+                                                 "action": "approve_reply"}).json()
+    frozen = client.post("/api/cases", json=dict(changed, warnings=["noch einmal geändert"])).json()
+    assert frozen["warnings"] == approved["warnings"]

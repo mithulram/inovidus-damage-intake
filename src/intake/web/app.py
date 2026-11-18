@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from .. import actions, pipeline
 from ..actions import Approval, AuditLog
 from ..context import Context
+from ..env import load_dotenv
 from ..models import AuditEvent, CaseRecord, InboundEmail, ReplyDraft
 from ..providers import get_provider
 from ..rules import DEFAULT_RULES_PATH, load_rules
@@ -63,6 +64,7 @@ def _context(provider: str | None = None, scenario_id: str | None = None) -> Con
 
 def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
                static_dir: Path | str | None = None) -> FastAPI:
+    load_dotenv()
     app = FastAPI(title="Schadenmeldungen – Prüfliste")
     app.state.store = store if store is not None else CaseStore()
     app.state.audit = audit if audit is not None else AuditLog()
@@ -83,11 +85,19 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
         except ValueError:
             raise HTTPException(422, "Ungültige Vorgangs-ID") from None
         if existing is not None:
-            return existing
+            if any(e.actor != "system" for e in existing.audit):
+                return existing  # a human already acted on it: never overwrite
+            volatile = {"audit", "processed_at", "received_at"}
+            if existing.model_dump(exclude=volatile) == case.model_dump(exclude=volatile):
+                return existing  # same result: idempotent
         case = case.model_copy(deep=True)
-        event = AuditEvent(ts=datetime.now(timezone.utc), actor="system", event="in Prüfliste übernommen",
+        label = "in Prüfliste übernommen" if existing is None else "neu verarbeitet (Regeln oder Leser geändert)"
+        event = AuditEvent(ts=datetime.now(timezone.utc), actor="system", event=label,
                            details={"case_id": case.case_id})
-        case.audit.append(event)
+        if existing is not None:
+            case.audit = [*existing.audit, event]
+        else:
+            case.audit.append(event)
         app.state.store.save(case)
         app.state.audit.append(event)
         return case
@@ -100,7 +110,8 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
     @app.get("/api/scenarios")
     def scenarios():
         return [{"id": s.id, "title": s.title, "description": s.description, "email": s.email,
-                 "expected": s.expected, "has_overrides": bool(s.rule_overrides or s.data_overrides)}
+                 "expected": s.expected, "rule_overrides": s.rule_overrides or {},
+                 "has_overrides": bool(s.rule_overrides or s.data_overrides)}
                 for s in load_scenarios()]
 
     @app.get("/api/rules")
@@ -135,7 +146,8 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
     @app.get("/api/cases")
     def cases():
         return [{"case_id": c.case_id, "received_at": c.received_at, "subject": c.input.subject,
-                 "status": c.status, "urgency": c.urgency.level if c.urgency else None,
+                 "sender": c.input.sender_email, "status": c.status,
+                 "urgency": c.urgency.level if c.urgency else None,
                  "winner": c.match.winner if c.match else None,
                  "selected_contract": c.match.selected_contract if c.match else None,
                  "failed_gates": c.match.failed_gates if c.match else []} for c in app.state.store.list()]
