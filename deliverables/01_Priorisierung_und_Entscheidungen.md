@@ -24,7 +24,7 @@ Die Aufgabe sagt: **Eine unklare Zuordnung darf nie zu einer Aktion am falschen 
 
 | Option | Stärken | Schwächen | Entscheidung |
 |---|---|---|---|
-| **Python-Dienst + n8n + eigene Oberfläche** | Logik testbar (über 500 Tests), Regeln in einer Datei, n8n zeigt den Ablauf sichtbar | etwas mehr Aufbau | **gewählt** |
+| **Python-Dienst + n8n + eigene Oberfläche** | Logik testbar (über 550 Tests), Regeln in einer Datei, n8n zeigt den Ablauf sichtbar | etwas mehr Aufbau | **gewählt** |
 | nur n8n | sehr anschaulich, selbst hostbar | Zuordnungslogik in Code-Knoten schwer zu testen und zu versionieren | n8n nur als „Kleber“ |
 | LangChain / LangGraph | viele Bausteine | zu schwer für 6 feste Schritte, versteckt die einfache Logik | nicht nötig |
 | Dify | schnelle KI-Apps, RAG eingebaut | Logik in Plattform-Einstellungen, schwach für feste Regeln | eher für den Wissensassistenten |

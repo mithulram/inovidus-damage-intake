@@ -5,7 +5,7 @@
   "processing": {
     "provider": "recorded(groq)",
     "model": "openai/gpt-oss-120b",
-    "rules_version": "sha256:63099795bf3f",
+    "rules_version": "sha256:b425698c1e6b",
     "fallback_used": false,
     "scenario_id": "S7"
   },

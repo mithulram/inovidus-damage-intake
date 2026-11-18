@@ -424,7 +424,7 @@ function renderCase(opts = {}) {
   }
   const c = cur.case, sc = cur.scenario, ext = c.understanding.extraction, cl = c.understanding.classification, loc = c.match.location;
   const misses = expectationCheck(sc, c);
-  const floorShow = ext.floor_raw ? `<small> → ${loc.floor_note ? esc(loc.floor_note.replace(/^'.*?' /, "")) : floorText(loc)}</small>` : "";
+  const floorShow = ext.floor_raw ? `<small> → ${loc.floor_note ? esc(loc.floor_note.replace(/^'.*?' /, "").replace(/^=\s*/, "")) : floorText(loc)}</small>` : "";
   view.innerHTML = `<div class="case">
     <div class="case-head">
       <h1 class="case-title">${esc(c.input.subject || "(ohne Betreff)")}</h1>

@@ -84,6 +84,6 @@ Der **n8n-Workflow** zeigt den Ablauf (ein Knoten pro Schritt). n8n leitet nur w
 
 A prototype that turns a tenant's damage-report email into a checked, explainable case. **The LLM only reads** (classification, extraction, urgency hint – Groq `openai/gpt-oss-120b` with strict JSON schema, or a rule-based reader with no API key). **Deterministic rules decide** the ERP match: per-signal points (name, address, floor, side, contact), contradictions veto a candidate regardless of threshold, then threshold + margin, then an active-contract check that never falls back to another contract. Anything unclear becomes `NEEDS_REVIEW`. **A human acts**: every contract-level action goes through one approval handler and an append-only audit log; there is no send function anywhere.
 
-Stack: Python 3.12, Pydantic, FastAPI, rapidfuzz, a hand-built review UI (no framework, offline), n8n 2.x for the visible workflow (one HTTP node per step, parity-tested against the single-call API). 14 business scenarios with exact expected outcomes, 500+ tests. All business rules live in `config/rules.yaml`.
+Stack: Python 3.12, Pydantic, FastAPI, rapidfuzz, a hand-built review UI (no framework, offline), n8n 2.x for the visible workflow (one HTTP node per step, parity-tested against the single-call API). 14 business scenarios with exact expected outcomes, 550+ tests. All business rules live in `config/rules.yaml`.
 
 Run: `uv sync && uv run intake-scenarios && uv run intake-ui`.

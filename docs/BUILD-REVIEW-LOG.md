@@ -28,3 +28,6 @@ R3-01 "Musterstraße 12 oder 14" not seen as two buildings · R3-02 "bei der Hau
 ## Inspection 4 – full build (by Codex, fresh session, 264 s) – **Score 8/10, 3 findings**
 R4-01 "Anschrift"/"house number" uncertainty not recognised as building uncertainty · R4-02 UI could approve a reply/task text it had not displayed · R4-03 an order for an earlier assignment showed as done after reassignment.
 - Claude fixed all three (+5 regression tests); end-to-end browser run (Playwright, real Chrome) of S1 approve+order, S2 manual approval with reason, S4c registered-address variant, S5b building action: no errors. 558 tests.
+
+## Inspection 5 – not completed
+Codex stopped with "usage limit reached" (resets 19 Nov 2026 00:14). Round 5 did not run; the last completed independent score is **8/10 (round 4)**, whose 3 findings are fixed with regression tests. Per Mithul's rules, the reviewer is not switched to Claude without his OK.

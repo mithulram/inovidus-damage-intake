@@ -5,7 +5,7 @@
   "processing": {
     "provider": "offline",
     "model": null,
-    "rules_version": "sha256:63099795bf3f",
+    "rules_version": "sha256:b425698c1e6b",
     "fallback_used": false,
     "scenario_id": "S5b"
   },
