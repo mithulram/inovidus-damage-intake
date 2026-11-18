@@ -4,10 +4,14 @@ import socket
 
 import pytest
 
-from intake.models import InboundEmail, MessageType
+from intake.context import Context
+from intake.models import Gate, InboundEmail, MessageType, Status, Urgency
 from intake.normalize import normalize_floor, normalize_side
+from intake.pipeline import process
 from intake.providers.offline import OfflineProvider
-from intake.rules import load_rules
+from intake.rules import ROOT, load_rules
+from intake.scenarios import FIXED_NOW, load_scenario, run_scenario
+from intake.steps.draft import load_templates
 
 
 @pytest.fixture
@@ -110,7 +114,7 @@ def test_damage_details_are_raw_and_language_is_detected(rules, since, language,
     extraction = result.extraction
     assert extraction.damage_description == sentence
     assert extraction.since == since
-    assert extraction.room == ("kitchen" if language == "en" else "küche")
+    assert extraction.room == ("kitchen" if language == "en" else "Küche")
     assert extraction.photos_mentioned is True
     assert extraction.phone == "+49 30 1234 5678"
     assert extraction.language == language
@@ -131,3 +135,156 @@ def test_absent_details_are_not_invented_and_provider_is_offline(rules, monkeypa
         "floor_raw": None, "side_raw": None, "room": None, "damage_description": None,
         "since": None, "photos_mentioned": False, "phone": None, "language": "de", "location_alternatives": [],
     }
+
+
+@pytest.mark.parametrize("keyword", [
+    word for rule in load_rules().urgency.rules if rule.level == Urgency.NOTFALL for word in rule.any
+])
+def test_every_emergency_phrase_stays_in_scope_and_urgent_end_to_end(keyword):
+    ctx = Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW)
+    case = process(InboundEmail(body=f"{keyword}. Musterstr. 12, 2. OG links. Max Mustermann"), ctx)
+    assert case.understanding.classification.type == MessageType.SCHADENMELDUNG
+    assert case.status == Status.READY_FOR_APPROVAL
+    assert case.urgency.level == Urgency.NOTFALL
+    assert case.internal_task.priority == Urgency.NOTFALL
+    assert case.internal_task.scope == "contract"
+    assert case.reply_draft.variant == "NOTFALL"
+    translations = load_templates()["translations"]
+    for instruction in case.urgency.safety_instructions:
+        translated = translations.get(case.reply_draft.language, {}).get(instruction, instruction)
+        assert translated in case.reply_draft.body
+
+
+@pytest.mark.parametrize("source", ["category", "urgency"])
+def test_damage_routing_includes_configured_category_and_urgency_keywords(source):
+    overrides = {"classification": {"damage_keywords": [], "categories": []}}
+    if source == "category":
+        overrides["classification"]["categories"] = [
+            {"name": "Testschaden", "trade": "Testgewerk", "keywords": ["prüfwort"]},
+        ]
+    else:
+        overrides["urgency"] = {"rules": [{"level": "DRINGEND", "label": "Testregel", "any": ["prüfwort"]}]}
+    rules = load_rules(overrides=overrides)
+    result = OfflineProvider().understand(InboundEmail(body="PRÜFWORT. Frage zur Miete."), rules)
+    assert result.classification.type == MessageType.SCHADENMELDUNG
+    assert "prüfwort" in result.classification.reason
+
+
+@pytest.mark.parametrize("location,extra", [
+    ("2. OG links oder 3. OG rechts", "3. OG rechts"),
+    ("2. OG links und 3. OG links", "3. OG links"),
+    ("2. OG links und 2. OG rechts", "rechts"),
+    ("2. OG links und rechts", "rechts"),
+    ("2. OG links. Außerdem Musterstr. 16, 2. OG links", "Musterstr. 16"),
+    ("2. OG links. Außerdem Beispielweg 7a, 2. OG links", "Beispielweg 7a"),
+])
+def test_distinct_locations_keep_first_floor_and_side_and_copy_extra_span(rules, location, extra):
+    email = InboundEmail(body=f"Wasser läuft aus. Musterstr. 12, {location}. Max Mustermann")
+    result = OfflineProvider().understand(email, rules)
+    assert result.extraction.floor_raw == "2. OG"
+    assert result.extraction.side_raw == "links"
+    assert extra in result.extraction.location_alternatives
+    assert all(span in email.body for span in result.extraction.location_alternatives)
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.status == Status.NEEDS_REVIEW
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.selected_contract is None
+
+
+@pytest.mark.parametrize("marker", ["unsicher", "weiß nicht genau", "weiss nicht genau", "glaube", "vielleicht",
+                                    "not sure", "maybe", "I think"])
+@pytest.mark.parametrize("before", [True, False])
+def test_uncertainty_near_location_is_literal_evidence(rules, marker, before):
+    location = f"{marker}: 2. OG links" if before else f"2. OG links; {marker}"
+    email = InboundEmail(body=f"Wasser läuft aus. Musterstr. 12, {location}. Max Mustermann")
+    extraction = OfflineProvider().understand(email, rules).extraction
+    assert extraction.floor_raw == "2. OG" and extraction.side_raw == "links"
+    assert extraction.location_alternatives == [marker]
+
+
+@pytest.mark.parametrize("body", [
+    "Wasser läuft aus. Musterstr. 12, 2. OG links. Bitte kommen Sie heute oder morgen. Max Mustermann",
+    "Das Bad oder die Küche? Egal, Wasser läuft in der Küche aus. Musterstr. 12, 2. OG links. Max Mustermann",
+    "Water is leaking. Musterstr. 12, 2. OG left. Please come either today or tomorrow. Max Mustermann",
+    "Wasser läuft aus. Musterstr. 12, 2. OG links; bitte heute oder morgen kommen. Max Mustermann",
+    "Water is leaking. Musterstr. 12, 2. OG left; please come either today or tomorrow. Max Mustermann",
+])
+def test_unrelated_alternatives_do_not_force_location_review(rules, body):
+    email = InboundEmail(body=body)
+    extraction = OfflineProvider().understand(email, rules).extraction
+    assert extraction.location_alternatives == []
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.status == Status.READY_FOR_APPROVAL
+    assert Gate.UNIT_AMBIGUOUS not in case.match.failed_gates
+
+
+@pytest.mark.parametrize("marker", ["unsicher", "weiß nicht genau", "glaube", "vielleicht",
+                                    "not sure", "maybe", "I think"])
+@pytest.mark.parametrize("punctuation", [".", "?", "!"])
+@pytest.mark.parametrize("before", [True, False])
+def test_uncertainty_in_a_different_sentence_does_not_apply_to_location(rules, marker, punctuation, before):
+    location = "Musterstr. 12, 2. OG links"
+    body = f"{marker}{punctuation} {location}." if before else f"{location}{punctuation} {marker}."
+    extraction = OfflineProvider().understand(InboundEmail(body=body), rules).extraction
+    assert extraction.location_alternatives == []
+
+
+@pytest.mark.parametrize("body", [
+    "Ich bin unsicher: Musterstr. 12, 2. OG links.",
+    "Musterstr. 12, 2. OG links; ich bin unsicher.",
+    "Musterstr. 12, 2. OG li.; ich bin unsicher.",
+])
+def test_location_abbreviations_and_ordinals_are_not_sentence_boundaries(rules, body):
+    extraction = OfflineProvider().understand(InboundEmail(body=body), rules).extraction
+    assert extraction.location_alternatives == ["unsicher"]
+
+
+def test_inspection_example_forces_unit_review():
+    email = InboundEmail(body="Wasser läuft aus. Musterstr. 12, 2. OG links oder 3. OG rechts; "
+                         "ich bin bei der Etage unsicher. Viele Grüße, Max Mustermann")
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.status == Status.NEEDS_REVIEW
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.selected_contract is None
+    assert case.understanding.extraction.floor_raw == "2. OG"
+    assert case.understanding.extraction.side_raw == "links"
+    assert case.understanding.extraction.location_alternatives == ["3. OG rechts", "unsicher"]
+
+
+@pytest.mark.parametrize("body,subject", [
+    ("Musterstr. 12, 2. OG links. Musterstraße 12, zweite Etage left.", "Musterstrasse 12, 2. OG links"),
+    ("Musterstr. 12, EG links. Musterstraße 12, Erdgeschoss left.", ""),
+    ("Musterstr. 12, 2. OG links.", "oder unsicher"),
+    ("Ich bin unsicher, ob ich Fotos senden soll. " + "Hier sind weitere Informationen. " * 4
+     + "Musterstr. 12, 2. OG links.", ""),
+])
+def test_repeated_equivalent_locations_and_distant_uncertainty_are_not_alternatives(rules, body, subject):
+    result = OfflineProvider().understand(InboundEmail(subject=subject, body=body), rules)
+    assert result.extraction.location_alternatives == []
+
+
+@pytest.mark.parametrize("filename,status", [("S01_original.yaml", Status.READY_FOR_APPROVAL),
+                                           ("S06_rent_question.yaml", Status.OUT_OF_SCOPE)])
+def test_original_and_rent_scenarios_are_preserved(filename, status):
+    scenario_path = ROOT / "scenarios" / filename
+    case, checks = run_scenario(load_scenario(scenario_path), provider=OfflineProvider())
+    assert all(c.passed for c in checks)
+    assert case.status == status
+    assert case.understanding.extraction.location_alternatives == []
+
+
+@pytest.mark.parametrize("room,expected", [("Küche", "Küche"), ("KÜCHE", "KÜCHE"), ("küche", "küche"),
+                                          ("Kitchen", "Kitchen"), ("Kueche", "Küche")])
+def test_room_preserves_original_casing_with_capitalized_fallback(rules, room, expected):
+    result = OfflineProvider().understand(InboundEmail(body=f"Wasser in der {room}."), rules)
+    assert result.extraction.room == expected
+
+
+def test_multiline_location_uncertainty_still_forces_review():
+    email = InboundEmail(body="Wasser läuft aus. Musterstr. 12,\n2. OG\nlinks;\n"
+                         "Bei der Etage bin ich unsicher. Viele Grüße, Max Mustermann")
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.floor_raw == "2. OG"
+    assert case.understanding.extraction.side_raw == "links"
+    assert case.status == Status.NEEDS_REVIEW
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates

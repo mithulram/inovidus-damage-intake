@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from ..models import Classification, Extraction, InboundEmail, MessageType, Understanding
-from ..normalize import fold
+from ..normalize import fold, normalize_floor, normalize_house_no, normalize_side, normalize_street
 from ..rules import Rules
 
 _NAME_WORD = r"(?:[A-ZÄÖÜ][a-zäöüßéèáà'-]+|[A-ZÄÖÜ]\.)"
@@ -25,7 +25,7 @@ def _raw(pattern: str, text: str) -> str | None:
     return hit.group(0) if hit else None
 
 
-def _floor(text: str, rules: Rules) -> re.Match | None:
+def _floors(text: str, rules: Rules) -> list[re.Match]:
     terms = sorted(rules.normalize.ground_floor_terms + rules.normalize.unclear_floor_terms,
                    key=len, reverse=True)
     ordinals = "|".join(map(re.escape, rules.normalize.ordinal_words))
@@ -35,7 +35,61 @@ def _floor(text: str, rules: Rules) -> re.Match | None:
         r"|(?:\d+\s*(?:st|nd|rd|th)|first|second|third|fourth|fifth)\s+floor\b"
         r"|(?:" + "|".join(map(re.escape, terms)) + r")\b)"
     )
-    return re.search(pattern, text, re.IGNORECASE)
+    return list(re.finditer(pattern, text, re.IGNORECASE))
+
+
+def _near(left: re.Match, right: re.Match, distance: int = 55) -> bool:
+    first, last = sorted((left, right), key=lambda m: m.start())
+    return last.start() - first.end() <= distance
+
+
+def _location_alternatives(
+    text: str, addresses: list[re.Match], floors: list[re.Match], sides: list[re.Match], rules: Rules,
+    body_end: int,
+) -> list[str]:
+    """Keep literal evidence of distinct locations and nearby uncertainty."""
+    def floor_key(match: re.Match) -> int | str:
+        floor = normalize_floor(match.group(0), rules.normalize)[0]
+        return floor if floor is not None else fold(match.group(0))
+
+    def same_sentence(left: re.Match, right: re.Match) -> bool:
+        first, last = sorted((left, right), key=lambda m: m.start())
+        # Punctuation inside location tokens ("Musterstr.", "2. OG", "li.")
+        # is not a sentence boundary; only inspect the gap between tokens.
+        return re.search(r"[.!?]", text[first.end():last.start()]) is None
+
+    spans = []
+    for matches, key in (
+        (addresses, lambda m: (normalize_street(m.group("street")), normalize_house_no(m.group("number")))),
+        (floors, floor_key),
+        (sides, lambda m: normalize_side(m.group(0), rules.normalize)),
+    ):
+        seen = set()
+        for match in matches:
+            value = key(match)
+            if seen and value not in seen:
+                end = match.end()
+                # A floor followed directly by its side is one useful raw span.
+                if matches is floors:
+                    following = next((s for s in sides if s.start() >= end
+                                      and re.fullmatch(r"[\s,/-]{0,15}", text[end:s.start()])), None)
+                    if following:
+                        end = following.end()
+                spans.append((match.start(), end))
+            seen.add(value)
+    locations = addresses + floors + sides
+    for marker in re.finditer(
+        r"\b(?:unsicher|wei(?:ß|ss)\s+nicht\s+genau|glaube|vielleicht|not\s+sure|maybe|I\s+think)\b",
+        text, re.IGNORECASE,
+    ):
+        # Line breaks inside a location are fine; body and subject are separate sources.
+        if any(_near(m, marker) and same_sentence(m, marker)
+               and (m.start() < body_end) == (marker.start() < body_end) for m in locations):
+            spans.append(marker.span())
+    # Avoid repeating a side that is already included in an alternative floor.
+    return list(dict.fromkeys(text[start:end] for start, end in sorted(set(spans))
+                              if not any(a <= start and end <= b and (a, b) != (start, end)
+                                         for a, b in spans)))
 
 
 def _signature(body: str) -> str | None:
@@ -57,6 +111,8 @@ class OfflineProvider:
         folded = fold(text)
         cfg = rules.classification
         damage_hits = _hits(folded, cfg.damage_keywords)
+        damage_hits += [hit for category in cfg.categories for hit in _hits(folded, category.keywords)]
+        damage_hits += [hit for rule in rules.urgency.rules for hit in _hits(folded, rule.any)]
         message_type = MessageType.SONSTIGES
         type_hits = damage_hits
         if damage_hits:
@@ -75,21 +131,21 @@ class OfflineProvider:
         )
         # Prefer facts in the body; the subject remains a fallback source.
         raw_text = f"{email.body}\n{email.subject}"
-        address = _ADDRESS.search(raw_text)
-        floor = _floor(raw_text, rules)
-        anchors = [m for m in (address, floor) if m]
-        side = None
+        addresses = list(_ADDRESS.finditer(raw_text))
+        floors = _floors(raw_text, rules)
+        address = addresses[0] if addresses else None
+        floor = floors[0] if floors else None
+        anchors = addresses + floors
         side_terms = sorted({t for values in rules.normalize.side_terms.values() for t in values},
                             key=len, reverse=True)
         side_pattern = r"(?<!\w)(?:" + "|".join(map(re.escape, side_terms)) + r")(?!\w)"
-        for anchor in anchors:
-            nearby = raw_text[max(0, anchor.start() - 35):anchor.end() + 55]
-            side = _raw(side_pattern, nearby)
-            if side:
-                break
+        sides = [m for m in re.finditer(side_pattern, raw_text, re.IGNORECASE)
+                 if not anchors or any(_near(m, anchor) for anchor in anchors)]
+        side = sides[0].group(0) if sides else None
         sender_name = _signature(email.body)
         holder = re.search(rf"(?i:Wohnung\s+von|für\s+meinen\s+Partner)\s+({_NAME})", email.body)
-        room = next((r for r in cfg.rooms if fold(r) in folded), None)
+        room_term = next((r for r in cfg.rooms if fold(r) in folded), None)
+        room = (_raw(re.escape(room_term), raw_text) or room_term.capitalize()) if room_term else None
         description = next((s.strip() for s in re.split(r"(?<=[.!?])\s+", email.body)
                             if _hits(fold(s), cfg.damage_keywords)), None)
         tokens = re.findall(r"\b\w+\b", folded)
@@ -101,6 +157,7 @@ class OfflineProvider:
             street_raw=address.group("street") if address else None,
             house_no=address.group("number") if address else None,
             floor_raw=floor.group(0) if floor else None, side_raw=side, room=room,
+            location_alternatives=_location_alternatives(raw_text, addresses, floors, sides, rules, len(email.body)),
             damage_description=description,
             since=_raw(r"\b(?:seit\s+(?:gestern|heute(?:\s+(?:Morgen|Nacht))?)|since\s+yesterday)\b", email.body),
             photos_mentioned=bool(re.search(r"\b(?:Fotos?|Bilder|photos?)\b", text, re.IGNORECASE)),

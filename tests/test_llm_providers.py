@@ -60,10 +60,15 @@ def test_request_matches_recorded_contract_and_uses_response_model(original, res
     assert request.extensions["timeout"] == dict.fromkeys(["connect", "read", "write", "pool"], 30.0)
     payload = json.loads(request.content)
     fixture = json.loads(FIXTURES[0].read_text())
-    assert payload == {**fixture["request"], "temperature": 0, "response_format": {
+    expected_request = copy.deepcopy(fixture["request"])
+    expected_request["messages"][0]["content"] = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+    assert payload == {**expected_request, "temperature": 0, "response_format": {
         "type": "json_schema", "json_schema": {"name": "understanding", "strict": True, "schema": SCHEMA},
     }}
-    assert SYSTEM_PROMPT_PATH.read_bytes() == (ROOT / "examples/llm_recorded/system_prompt.txt").read_bytes()
+    recorded_prompt = (ROOT / "examples/llm_recorded/system_prompt.txt").read_text(encoding="utf-8")
+    added_instruction = ("- Nennt die E-Mail mehrere oder unsichere Ortsangaben, liste die weiteren/unsicheren "
+                         "wörtlich in location_alternatives.\n")
+    assert SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").replace(added_instruction, "") == recorded_prompt
 
 
 @pytest.mark.parametrize("failure", ["invalid_json", "validation", "missing_field", "envelope", "raw_json", "400"])
@@ -161,8 +166,8 @@ def test_parser_refuses_coercion_and_nonfinite_numbers(response, field, value):
 def test_every_recorded_fixture_parses_and_satisfies_scenario(fixture_path):
     fixture = json.loads(fixture_path.read_text())
     response = fixture["response"]
-    assert SCHEMA == json.loads((ROOT / "examples/llm_recorded/schema.json").read_text())
     result = parse_llm_content(response["choices"][0]["message"]["content"], "recorded(groq)", response["model"])
+    assert result.extraction.location_alternatives == []
     scenario = load_scenario(ROOT / "scenarios" / (fixture_path.name.removesuffix(".groq.json") + ".yaml"))
     assert build_user_message(scenario.email) == fixture["request"]["messages"][1]["content"]
     provider = get_provider("recorded")
@@ -173,6 +178,35 @@ def test_every_recorded_fixture_parses_and_satisfies_scenario(fixture_path):
     assert not case.processing.fallback_used
     if scenario.id == "S1":
         assert case.match.selected_contract == "MV-10245"
+
+
+def test_live_schema_adds_required_location_array_to_recorded_schema():
+    recorded_schema = json.loads((ROOT / "examples/llm_recorded/schema.json").read_text())
+    live_extraction = SCHEMA["properties"]["extraction"]
+    assert live_extraction["additionalProperties"] is False
+    assert live_extraction["properties"]["location_alternatives"] == {"type": "array", "items": {"type": "string"}}
+    assert "location_alternatives" in live_extraction["required"]
+    previous_schema = copy.deepcopy(SCHEMA)
+    del previous_schema["properties"]["extraction"]["properties"]["location_alternatives"]
+    previous_schema["properties"]["extraction"]["required"].remove("location_alternatives")
+    assert previous_schema == recorded_schema
+    assert len(FIXTURES) == 5
+
+
+@pytest.mark.parametrize("alternatives", [[], ["3. OG rechts", "bei der Etage unsicher"]])
+def test_parser_accepts_live_location_alternatives(response, alternatives):
+    content = json.loads(response["choices"][0]["message"]["content"])
+    content["extraction"]["location_alternatives"] = alternatives
+    result = parse_llm_content(json.dumps(content), "test", "model")
+    assert result.extraction.location_alternatives == alternatives
+
+
+@pytest.mark.parametrize("alternatives", [None, "3. OG rechts", {}, 1, True, [None], [1], [True], [[]], [{}]])
+def test_parser_rejects_invalid_location_array_and_item_types(response, alternatives):
+    content = json.loads(response["choices"][0]["message"]["content"])
+    content["extraction"]["location_alternatives"] = alternatives
+    with pytest.raises(ValueError):
+        parse_llm_content(json.dumps(content), "test", "model")
 
 
 def test_recorded_unknown_email_falls_back_and_matching_is_by_message_not_id(original):

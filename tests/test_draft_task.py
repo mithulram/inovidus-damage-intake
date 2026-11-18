@@ -151,7 +151,7 @@ def test_contract_task_contains_deadline_photos_caretaker_and_related_history(ct
     assert internal.scope == "contract"
     assert internal.contract_id == "MV-10245"
     assert internal.object_id == "OBJ-MS12"
-    assert all(text in internal.title for text in ["Sanitär", "Wasserschaden", "küche", "MV-10245"])
+    assert all(text in internal.title for text in ["Sanitär", "Wasserschaden", "Küche", "MV-10245"])
     assert internal.assignee_role == "Technik / Sanitär"
     assert internal.priority == Urgency.DRINGEND
     assert internal.due_hours == 24
@@ -173,6 +173,28 @@ def test_ready_emergency_task_requests_immediate_emergency_service(ctx):
     assert case.internal_task.priority == Urgency.NOTFALL
     assert case.internal_task.due_hours == 2
     assert "Notdienst sofort beauftragen" in case.internal_task.checklist
+
+
+@pytest.mark.parametrize("level", list(Urgency))
+def test_contractor_checklist_uses_natural_response_target_without_duplicate_deadline(ctx, level):
+    case = damage_case(ctx)
+    target = ctx.rules.urgency.levels[level]
+    case.urgency.level = level
+    case.urgency.response_target = target.response_target
+    case.urgency.due_hours = target.due_hours
+    result = task(case, ctx)
+    booking, = [item for item in result.internal_task.checklist if item.startswith("Handwerker beauftragen")]
+    assert booking == f"Handwerker beauftragen – Ziel: {target.response_target}"
+
+
+@pytest.mark.parametrize("level,target", [(Urgency.DRINGEND, "a contractor within 24 hours"),
+                                         (Urgency.NORMAL, "within 5 working days")])
+def test_english_standard_reply_has_natural_response_target(ctx, level, target):
+    case = damage_case(ctx)
+    case.understanding.extraction.language = "en"
+    case.urgency.level = level
+    case.urgency.response_target = ctx.rules.urgency.levels[level].response_target
+    assert f"Our response or service target: {target}." in render_reply(case, ctx).body
 
 
 def test_task_lists_every_related_prior_case_and_excludes_unrelated_history():

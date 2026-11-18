@@ -23,7 +23,7 @@ reply:
     confirm_identity: "Please provide the contract holder's full name or your contract number."
     confirm_address: "Please provide your full address and your full name."
     eligibility: "We are checking the information you provided and will get back to you."
-    standard: "Our target for responding or arranging work: {response_target}."
+    standard: "Our response or service target: {response_target}."
     photos: "You mentioned photos, but none were attached. Please forward the photos to us."
     ask_registered_email: "Please write to us again from the email address registered with us."
 # Übersetzungen der konfigurierten deutschen Ziel- und Sicherheitstexte.
@@ -51,7 +51,7 @@ task:
   routing_checklist: "Nachricht an {route_to} zur Bearbeitung weiterleiten"
   contract_title: "{trade}-Handwerker beauftragen – {category} {room} ({contract_id})"
   contract_assignee: "Technik / {trade}"
-  book_contractor: "Handwerker beauftragen: {response_target} (Ziel: {due_hours} Stunden)"
+  book_contractor: "Handwerker beauftragen – Ziel: {response_target}"
   photos: "Erwähnte Fotos anfordern bzw. beigefügte Fotos prüfen"
   caretaker: "Hausmeister informieren"
   prior_case: "Zusammenhang mit '{title}' ({case_id}, erledigt durch {contractor}) prüfen – ggf. Gewährleistung"

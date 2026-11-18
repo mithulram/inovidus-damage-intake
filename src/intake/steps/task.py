@@ -29,7 +29,7 @@ def run(case: CaseRecord, ctx: Context) -> CaseRecord:
         category = case.understanding.classification.category or t["default_category"]
         trade = case.understanding.classification.trade or t["default_trade"]
         room = case.understanding.extraction.room or ""
-        checklist = [t["book_contractor"].format(response_target=urgency.response_target, due_hours=urgency.due_hours)]
+        checklist = [t["book_contractor"].format(response_target=urgency.response_target)]
         if urgency.level == Urgency.NOTFALL:
             checklist.insert(0, t["emergency"])
         if case.understanding.extraction.photos_mentioned:

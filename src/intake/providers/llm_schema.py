@@ -1,4 +1,4 @@
-"""The recorded strict schema and the shared, validated LLM/email boundary."""
+"""The live strict schema and the shared, validated LLM/email boundary."""
 
 from __future__ import annotations
 
@@ -10,6 +10,10 @@ from ..models import InboundEmail, Understanding
 from ..rules import ROOT
 
 SCHEMA = json.loads((ROOT / "examples/llm_recorded/schema.json").read_text(encoding="utf-8"))
+SCHEMA["properties"]["extraction"]["properties"]["location_alternatives"] = {
+    "type": "array", "items": {"type": "string"},
+}
+SCHEMA["properties"]["extraction"]["required"].append("location_alternatives")
 SYSTEM_PROMPT_PATH = ROOT / "config/prompts/understanding_system.txt"
 
 
@@ -27,6 +31,7 @@ def _validate(value: Any, schema: dict) -> None:
     types = [types] if isinstance(types, str) else types
     valid = {
         "object": isinstance(value, dict),
+        "array": isinstance(value, list),
         "string": isinstance(value, str),
         "number": type(value) in (int, float) and math.isfinite(value),
         "boolean": type(value) is bool,
@@ -41,10 +46,16 @@ def _validate(value: Any, schema: dict) -> None:
             raise ValueError("KI-Ausgabe hat fehlende oder zusätzliche Felder")
         for key, item in value.items():
             _validate(item, schema["properties"][key])
+    elif isinstance(value, list):
+        for item in value:
+            _validate(item, schema["items"])
 
 
 def parse_llm_content(content: str, provider: str, model: str | None) -> Understanding:
     payload = json.loads(content)
+    # Recordings predate this field; retain strict validation of every other field.
+    if isinstance(payload, dict) and isinstance(payload.get("extraction"), dict):
+        payload["extraction"].setdefault("location_alternatives", [])
     _validate(payload, SCHEMA)
     classification = payload["classification"]
     classification["confidence"] = max(0.0, min(1.0, classification["confidence"]))
