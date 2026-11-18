@@ -200,7 +200,8 @@ def test_uncertainty_near_location_is_literal_evidence(rules, marker, before):
     email = InboundEmail(body=f"Wasser läuft aus. Musterstr. 12, {location}. Max Mustermann")
     extraction = OfflineProvider().understand(email, rules).extraction
     assert extraction.floor_raw == "2. OG" and extraction.side_raw == "links"
-    assert extraction.location_alternatives == [marker]
+    expected = f"Musterstr. 12, {location}" if before else marker
+    assert extraction.location_alternatives == [expected]
 
 
 @pytest.mark.parametrize("body", [
@@ -230,14 +231,14 @@ def test_uncertainty_in_a_different_sentence_does_not_apply_to_location(rules, m
     assert extraction.location_alternatives == []
 
 
-@pytest.mark.parametrize("body", [
-    "Ich bin unsicher: Musterstr. 12, 2. OG links.",
-    "Musterstr. 12, 2. OG links; ich bin unsicher.",
-    "Musterstr. 12, 2. OG li.; ich bin unsicher.",
+@pytest.mark.parametrize("body,alternative", [
+    ("Ich bin unsicher: Musterstr. 12, 2. OG links.", "Ich bin unsicher: Musterstr. 12, 2. OG links"),
+    ("Musterstr. 12, 2. OG links; ich bin unsicher.", "unsicher"),
+    ("Musterstr. 12, 2. OG li.; ich bin unsicher.", "unsicher"),
 ])
-def test_location_abbreviations_and_ordinals_are_not_sentence_boundaries(rules, body):
+def test_location_abbreviations_and_ordinals_are_not_sentence_boundaries(rules, body, alternative):
     extraction = OfflineProvider().understand(InboundEmail(body=body), rules).extraction
-    assert extraction.location_alternatives == ["unsicher"]
+    assert extraction.location_alternatives == [alternative]
 
 
 def test_inspection_example_forces_unit_review():
@@ -453,3 +454,47 @@ def test_nearby_location_does_not_truncate_referring_clause(clause, separator):
         assert case.match.building_uncertain is True
         assert case.match.object_id is None
         assert case.internal_task.scope != "object"
+
+
+@pytest.mark.parametrize("address", [
+    "Musterstr. 12", "Musterstr 12", "Musterstraße 12", "Musterstrasse 12",
+    "Beispielweg 7a", "Testplatz 3", "Testallee 4", "Testgasse 5", "Testring 6",
+    "Musterstr.12",
+])
+@pytest.mark.parametrize("in_subject", [False, True])
+def test_uncertain_address_clause_prevents_building_action(address, in_subject):
+    clause = f"Vielleicht {address}"
+    email = InboundEmail(
+        subject=clause if in_subject else "",
+        body="Gasgeruch. " + ("" if in_subject else clause + ". ") + "Viele Grüße, Max Mustermann",
+    )
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.location_alternatives == [clause]
+    assert case.match.building_uncertain is True
+    assert case.match.object_id is None
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.selected_contract is None
+    assert case.internal_task.scope != "object"
+
+
+@pytest.mark.parametrize("clause", [
+    "Vielleicht 2. OG, Musterstr. 12, links",
+    "Vielleicht 2. OG",
+    "Vielleicht links",
+    "Vielleicht Musterstraße12",
+])
+def test_uncertain_location_clause_keeps_all_location_text(clause):
+    email = InboundEmail(body=f"Wasser läuft aus. {clause}. Max Mustermann")
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.location_alternatives == [clause]
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.selected_contract is None
+    assert case.status == Status.NEEDS_REVIEW
+
+
+def test_time_uncertainty_in_separate_clause_is_not_location_uncertainty():
+    email = InboundEmail(body="Bitte kommen Sie vielleicht morgen. Musterstr. 12, 2. OG links. Max Mustermann")
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.location_alternatives == []
+    assert Gate.UNIT_AMBIGUOUS not in case.match.failed_gates
+    assert case.match.building_uncertain is False

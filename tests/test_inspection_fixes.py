@@ -339,3 +339,8 @@ def test_approval_refused_when_rules_changed(client):
     r = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
                                           "contract_id": "MV-10245"})
     assert r.status_code == 409 and "Regeln" in r.json()["detail"]
+
+
+def test_compact_street_and_number_counts_as_building_uncertainty():
+    r = match(ext(location_alternatives=["Vielleicht Musterstraße12"]), InboundEmail(body="x"), JsonERP(), RULES)
+    assert r.building_uncertain is True and r.object_id is None

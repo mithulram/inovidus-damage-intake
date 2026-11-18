@@ -145,11 +145,11 @@ def _location_alternatives(
                             and (m.start() < body_end) == (marker.start() < body_end)
                             for m in locations + references)):
             continue
-        # Prefer the whole explicit referring clause over a nearby bare marker:
-        # "bei der Hausnummer bin ich unsicher" must retain building evidence.
+        # Keep the whole clause when it contains a location or an explicit
+        # reference, so "Vielleicht Musterstr. 12" retains building evidence.
         start, end = referring_clause(marker)
-        if any(start <= reference.start() and reference.end() <= end
-               and _near(reference, marker) for reference in references):
+        if any(start <= location.start() and location.end() <= end
+               and _near(location, marker) for location in locations + references):
             spans.append((start, end))
         # Line breaks inside a location are fine; body and subject are separate sources.
         elif any(_near(m, marker) and same_sentence(m, marker)
