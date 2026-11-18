@@ -330,4 +330,8 @@ Reviewer (Codex): give verdict + findings, and state **"Score: X/10"** in the su
 **Bilingual DE/EN:**
 - UI: language switch in the header, German default, choice remembered per browser; all labels from one dictionary. Data-driven reasons from the API stay German (business language), with the English UI explaining the labels.
 - n8n: sticky notes German first, English below; node names "German (English)".
-- Unchanged: tenant reply follows the email's language; Inovidus deliverables stay German.
+- Everything Mithul reads must exist in English too (he is B1 in German):
+  - UI English mode translates all labels **and** the system's reasons/flags (DE original + EN translation).
+  - n8n: every node name and note bilingual.
+  - Deliverables: German originals for Inovidus + an English twin of each in `deliverables/en/`; README English section expanded.
+- Unchanged: tenant reply follows the email's language; the submitted deliverables are the German ones.
