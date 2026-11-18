@@ -172,8 +172,13 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
                  "selected_contract": c.match.selected_contract if c.match else None,
                  "failed_gates": c.match.failed_gates if c.match else []} for c in app.state.store.list()]
 
-    @app.get("/api/cases/{case_id}", response_model=CaseRecord)
-    def case_by_id(case_id: str):
+    @app.get("/api/cases/{case_id}", response_model=CaseRecord | None)
+    def case_by_id(case_id: str, allow_missing: bool = False):
+        if allow_missing:
+            try:
+                return app.state.store.get(case_id)
+            except ValueError:
+                raise HTTPException(422, "Ungültige Vorgangs-ID") from None
         return get_case(case_id)
 
     @app.get("/api/cases/{case_id}/reply", response_model=ReplyDraft)

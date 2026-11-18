@@ -24,3 +24,7 @@ Fixes partly incomplete: R2-01 forged approval with actor "system" still accepte
 ## Inspection 3 – full build + docs (by Codex, fresh session, 368 s) – **Score 7/10, 6 findings**
 R3-01 "Musterstraße 12 oder 14" not seen as two buildings · R3-02 "bei der Hausnummer unsicher" kept only "unsicher" · R3-03 stale tab could overwrite a newer result and approve it · R3-04 gas + power outage gave contradictory safety advice · R3-05 reader "SONSTIGES" + hint NOTFALL still downgraded · R3-06 effort numbers did not follow the timelog's own categories.
 - Codex fixed R3-01/02 (WO5) and correctly **stopped** on R3-04 because it needed a field in Claude's `rules.py`. Claude fixed R3-03, R3-04 (config `safety_conflicts`, gas advice first), R3-05, R3-06 (effort rewritten: core 36 min AI-assisted, total window separate, Mithul's own time to be added). 553 tests.
+
+## Inspection 4 – full build (by Codex, fresh session, 264 s) – **Score 8/10, 3 findings**
+R4-01 "Anschrift"/"house number" uncertainty not recognised as building uncertainty · R4-02 UI could approve a reply/task text it had not displayed · R4-03 an order for an earlier assignment showed as done after reassignment.
+- Claude fixed all three (+5 regression tests); end-to-end browser run (Playwright, real Chrome) of S1 approve+order, S2 manual approval with reason, S4c registered-address variant, S5b building action: no errors. 558 tests.

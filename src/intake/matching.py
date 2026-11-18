@@ -222,8 +222,11 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
     if ext.location_alternatives:
         fail(Gate.UNIT_AMBIGUOUS, "E-Mail nennt mehrere oder unsichere Ortsangaben: "
                                   + "; ".join(ext.location_alternatives) + " – beim Mieter nachfragen")
-        street_word = re.compile(r"(str\.?|stra(ss|ß)e|weg|platz|allee|gasse|ring)\b|\b\d+\s*[a-z]?\s*$|adresse|address|haus",
-                                 re.IGNORECASE)
+        street_word = re.compile(
+            r"(str\.?|stra(ss|ß)e|weg|platz|allee|gasse|ring)\b|\b\d+\s*[a-z]?\s*$"
+            r"|adresse|anschrift|hausnummer|hausnr|haus\b|gebäude|gebaeude|objekt"
+            r"|address|house|street|building",
+            re.IGNORECASE)
         building_uncertain = any(street_word.search(alt) for alt in ext.location_alternatives)
         if building_uncertain:
             object_id = None

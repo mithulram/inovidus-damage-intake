@@ -269,3 +269,22 @@ def test_burst_pipe_alone_keeps_fuse_advice():
     case = process(InboundEmail(subject="Rohrbruch", body="Rohrbruch, Wasser kommt durch die Decke. Musterstraße 12, 2. OG links. Max Mustermann"),
                    Context.build(provider=OfflineProvider()))
     assert any("Sicherung" in x for x in case.urgency.safety_instructions)
+
+
+# ---- round 4 ---------------------------------------------------------------
+
+# R4-01 – every way of saying "the building is uncertain" blocks building actions
+@pytest.mark.parametrize("alternative", ["Bei der Anschrift bin ich unsicher", "not sure about the house number",
+                                         "Hausnummer weiß ich nicht genau", "unsure which building"])
+def test_building_uncertainty_words(alternative):
+    r = match(ext(location_alternatives=[alternative]), InboundEmail(body="x"), JsonERP(), RULES)
+    assert r.building_uncertain is True and r.object_id is None
+
+
+def test_anschrift_uncertainty_end_to_end(client):
+    email = {"subject": "Gasgeruch", "body": "Gasgeruch. Musterstr. 12, 2. OG links; Bei der Anschrift bin ich unsicher. Viele Grüße, Max Mustermann"}
+    case = client.post("/api/process", json={"email": email, "store": True}).json()
+    assert case["match"]["object_id"] is None
+    assert case["internal_task"]["scope"] != "object"
+    r = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "X", "action": "object_action"})
+    assert r.status_code == 403
