@@ -1,6 +1,6 @@
 id: S4a
 title: Name anders geschrieben
-description: "M. Musterman" – ähnlich, aber nicht gleich. Absender ist die registrierte Adresse, Punkte reichen, trotzdem Prüfung.
+description: '"M. Musterman" – ähnlich, aber nicht gleich. Absender ist die registrierte Adresse, Punkte reichen, trotzdem Prüfung.'
 email:
   subject: "Wasserschaden Küche"
   sender_email: max.mustermann@example.org
