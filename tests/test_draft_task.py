@@ -29,6 +29,7 @@ def damage_case(ctx, **changes):
 @pytest.mark.parametrize("language", ["de", "en"])
 @pytest.mark.parametrize("status,gates", [
     (Status.NEEDS_REVIEW, [Gate.FLOOR_MISSING, Gate.IDENTITY, Gate.VETO_ADDRESS]),
+    (Status.NEEDS_REVIEW, [Gate.UNIT_AMBIGUOUS]),
     (Status.NEEDS_REVIEW, [Gate.ELIGIBILITY]),
     (Status.OUT_OF_SCOPE, [Gate.OUT_OF_SCOPE]),
 ])
@@ -75,7 +76,8 @@ def test_ready_reply_metadata_deadline_photos_and_no_prior_cases(ctx, language, 
             assert value not in reply.body
 
 
-@pytest.mark.parametrize("gate", [Gate.FLOOR_MISSING, Gate.FLOOR_AMBIGUOUS, Gate.THRESHOLD, Gate.MARGIN, Gate.VETO_UNIT])
+@pytest.mark.parametrize("gate", [Gate.FLOOR_MISSING, Gate.FLOOR_AMBIGUOUS, Gate.UNIT_AMBIGUOUS,
+                                 Gate.THRESHOLD, Gate.MARGIN, Gate.VETO_UNIT])
 def test_unit_gates_ask_for_floor_and_side_with_german_counting(ctx, gate):
     case = damage_case(ctx)
     case.status = Status.NEEDS_REVIEW
@@ -83,6 +85,39 @@ def test_unit_gates_ask_for_floor_and_side_with_german_counting(ctx, gate):
     reply = render_reply(case, ctx)
     assert reply.variant == "confirm_unit"
     assert all(text in reply.body for text in ["Etage", "Wohnungsseite", "Erdgeschoss = EG", "1. OG"])
+
+
+@pytest.mark.parametrize("language,expected", [
+    ("de", ["vollständige Anschrift", "Etage", "Wohnungsseite"]),
+    ("en", ["full address", "floor", "apartment side"]),
+])
+@pytest.mark.parametrize("building_uncertain", [True, False])
+def test_unit_ambiguity_requests_exact_location_without_erp_facts(ctx, language, expected, building_uncertain):
+    case = damage_case(ctx, body="Wasser läuft aus. Musterstr. 12, 2. OG links oder 3. OG rechts. "
+                               "Viele Grüße, Max Mustermann")
+    assert case.match.failed_gates == [Gate.UNIT_AMBIGUOUS]
+    case.match.building_uncertain = building_uncertain
+    case.understanding.extraction.language = language
+    reply = render_reply(case, ctx)
+    variants = {"confirm_unit", "confirm_address"} if building_uncertain else {"confirm_unit"}
+    assert set(reply.variant.split("+")) == variants
+    assert all(text in reply.body for text in expected)
+    forbidden = {value for c in ctx.erp.contracts()
+                 for value in (c.contract_id, c.unit_label, c.tenant_name, c.unit_id, c.object_id)}
+    assert all(value not in reply.body for value in forbidden)
+    assert reply.auto_send is False
+
+
+@pytest.mark.parametrize("language,address_request", [("de", "vollständige Anschrift"), ("en", "full address")])
+def test_building_uncertainty_requests_address_without_address_gate(ctx, language, address_request):
+    case = damage_case(ctx)
+    case.status = Status.NEEDS_REVIEW
+    case.match.failed_gates = [Gate.ELIGIBILITY]
+    case.match.building_uncertain = True
+    case.understanding.extraction.language = language
+    reply = render_reply(case, ctx)
+    assert "confirm_address" in reply.variant
+    assert address_request in reply.body
 
 
 def test_failed_gates_combine_questions_and_eligibility_stays_neutral(ctx):

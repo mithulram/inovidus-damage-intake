@@ -44,12 +44,13 @@ def render_reply(case: CaseRecord, ctx: Context, variant: str | None = None) -> 
     else:
         gates = set(case.match.failed_gates)
         variants = []
-        unit_gates = {Gate.FLOOR_MISSING, Gate.FLOOR_AMBIGUOUS, Gate.THRESHOLD, Gate.MARGIN, Gate.VETO_UNIT}
+        unit_gates = {Gate.FLOOR_MISSING, Gate.FLOOR_AMBIGUOUS, Gate.UNIT_AMBIGUOUS,
+                      Gate.THRESHOLD, Gate.MARGIN, Gate.VETO_UNIT}
         if emergency or gates & unit_gates:
             variants.append("confirm_unit")
         if Gate.IDENTITY in gates:
             variants.append("confirm_identity")
-        if gates & {Gate.VETO_ADDRESS, Gate.NO_CANDIDATE}:
+        if case.match.building_uncertain or gates & {Gate.VETO_ADDRESS, Gate.NO_CANDIDATE}:
             variants.append("confirm_address")
         if Gate.ELIGIBILITY in gates or not variants:
             variants.append("eligibility")

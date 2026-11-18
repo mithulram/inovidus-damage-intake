@@ -70,16 +70,16 @@ classification:
       keywords: [rohrbruch, "rohr geplatzt", "burst pipe", "pipe burst", "wasser kommt durch die decke", "water through the ceiling", "durch die decke"]
     - name: Wasserschaden
       trade: Sanitär
-      keywords: [wasser, undicht, leck, tropft, "läuft aus", spüle, waschbecken, aufgequollen, feucht, water, leak, leaking, sink]
+      keywords: [wasserschaden, wasser, undicht, leck, tropft, "läuft aus", spüle, waschbecken, aufgequollen, feucht, water, leak, leaking, sink]
     - name: Rohrverstopfung
       trade: Sanitär
-      keywords: [verstopf, "läuft nicht ab", abfluss, clogged, blocked]
+      keywords: [verstopft, verstopfung, rohrverstopfung, "läuft nicht ab", abfluss, clogged, blocked]
     - name: Heizungsausfall
       trade: Heizung
-      keywords: [heizung, "kein warmwasser", "kalt", heating, "no hot water"]
+      keywords: [heizungsausfall, heizung, "kein warmwasser", "kalt", heating, "no hot water"]
     - name: Elektrik
       trade: Elektro
-      keywords: [strom, sicherung, steckdose, kurzschluss, electricity, power]
+      keywords: [stromausfall, strom, sicherung, steckdose, kurzschluss, electricity, power]
     - name: Schimmel
       trade: Maler / Bautrocknung
       keywords: [schimmel, mould, mold]

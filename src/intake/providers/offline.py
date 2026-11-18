@@ -11,13 +11,22 @@ from ..rules import Rules
 _NAME_WORD = r"(?:[A-ZÄÖÜ][a-zäöüßéèáà'-]+|[A-ZÄÖÜ]\.)"
 _NAME = rf"{_NAME_WORD}(?:[ \t]+{_NAME_WORD}){{1,3}}"
 _ADDRESS = re.compile(
-    r"\b(?P<street>[A-ZÄÖÜa-zäöüß][\w-]*?(?:str\.|straße|strasse|weg|platz|allee|gasse|ring))"
-    r"\s+(?P<number>\d+[ \t]?[a-z]?)\b", re.IGNORECASE,
+    r"\b(?P<street>[A-ZÄÖÜa-zäöüß][\w-]*?(?:straße|strasse|str\.?|weg|platz|allee|gasse|ring))"
+    r"\s*(?P<number>\d+(?:[ \t]?[a-z])?)\b", re.IGNORECASE,
+)
+_LOCATION_REFERENCE = re.compile(
+    r"\b(?:Etage|Stockwerk|Stock|Geschoss|Hausnummer|Hausnr\.?|Adresse|Anschrift|"
+    r"Straße|Strasse|Wohnungsseite|floor|address|street|house\s+number|apartment\s+side)\b",
+    re.IGNORECASE,
 )
 
 
-def _hits(text: str, keywords: list[str]) -> list[str]:
-    return [word for word in keywords if fold(word) in text]
+def _hits(text: str, keywords: list[str], *, whole_words: bool = False) -> list[str]:
+    # Category evidence must match complete words/phrases, not parts of other words.
+    # General damage stems and urgency phrases retain their configured semantics.
+    return [word for word in keywords
+            if (re.search(rf"(?<!\w){re.escape(fold(word))}(?!\w)", text)
+                if whole_words else fold(word) in text)]
 
 
 def _raw(pattern: str, text: str) -> str | None:
@@ -47,7 +56,7 @@ def _location_alternatives(
     text: str, addresses: list[re.Match], floors: list[re.Match], sides: list[re.Match], rules: Rules,
     body_end: int,
 ) -> list[str]:
-    """Keep literal evidence of distinct locations and nearby uncertainty."""
+    """Keep literal evidence of distinct locations and location-related uncertainty."""
     def floor_key(match: re.Match) -> int | str:
         floor = normalize_floor(match.group(0), rules.normalize)[0]
         return floor if floor is not None else fold(match.group(0))
@@ -78,14 +87,31 @@ def _location_alternatives(
                 spans.append((match.start(), end))
             seen.add(value)
     locations = addresses + floors + sides
+    references = list(_LOCATION_REFERENCE.finditer(text))
     for marker in re.finditer(
-        r"\b(?:unsicher|wei(?:ß|ss)\s+nicht\s+genau|glaube|vielleicht|not\s+sure|maybe|I\s+think)\b",
+        r"\b(?:unsicher|wei(?:ß|ss)\s+(?:ich\s+)?nicht\s+genau|glaube|vielleicht|not\s+sure|maybe|I\s+think)\b",
         text, re.IGNORECASE,
     ):
+        # "Unsicher, ob die Versicherung zahlt" asks a different question even
+        # when the preceding location is in the same sentence.
+        if (re.match(r"\s*,?\s*(?:ob|whether|if)\b", text[marker.end():], re.IGNORECASE)
+                and not any(m.start() >= marker.end() and _near(m, marker)
+                            and same_sentence(m, marker)
+                            and (m.start() < body_end) == (marker.start() < body_end)
+                            for m in locations + references)):
+            continue
         # Line breaks inside a location are fine; body and subject are separate sources.
         if any(_near(m, marker) and same_sentence(m, marker)
                and (m.start() < body_end) == (marker.start() < body_end) for m in locations):
             spans.append(marker.span())
+        else:
+            # A separate sentence can refer back to the location explicitly.
+            # Keep the reference too, so e.g. Hausnummer remains building evidence.
+            for reference in references:
+                if (_near(reference, marker) and same_sentence(reference, marker)
+                        and (reference.start() < body_end) == (marker.start() < body_end)):
+                    spans.append((min(reference.start(), marker.start()),
+                                  max(reference.end(), marker.end())))
     # Avoid repeating a side that is already included in an alternative floor.
     return list(dict.fromkeys(text[start:end] for start, end in sorted(set(spans))
                               if not any(a <= start and end <= b and (a, b) != (start, end)
@@ -111,7 +137,8 @@ class OfflineProvider:
         folded = fold(text)
         cfg = rules.classification
         damage_hits = _hits(folded, cfg.damage_keywords)
-        damage_hits += [hit for category in cfg.categories for hit in _hits(folded, category.keywords)]
+        damage_hits += [hit for category in cfg.categories
+                        for hit in _hits(folded, category.keywords, whole_words=True)]
         damage_hits += [hit for rule in rules.urgency.rules for hit in _hits(folded, rule.any)]
         message_type = MessageType.SONSTIGES
         type_hits = damage_hits
@@ -122,8 +149,9 @@ class OfflineProvider:
                 if hits := _hits(folded, route.keywords):
                     message_type, type_hits = MessageType(name), hits
                     break
-        category = next((c for c in cfg.categories if _hits(folded, c.keywords)), None)
-        keywords = list(dict.fromkeys(type_hits + (_hits(folded, category.keywords) if category else [])))
+        category = next((c for c in cfg.categories if _hits(folded, c.keywords, whole_words=True)), None)
+        keywords = list(dict.fromkeys(type_hits + (
+            _hits(folded, category.keywords, whole_words=True) if category else [])))
         classification = Classification(
             type=message_type, category=category.name if category else None,
             trade=category.trade if category else None, confidence=0.9 if category else 0.6,

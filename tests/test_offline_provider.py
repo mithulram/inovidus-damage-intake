@@ -55,12 +55,13 @@ def test_classifier_uses_configured_keywords_and_category_order():
 
 
 @pytest.mark.parametrize("street,number", [
-    ("Musterstr.", "12"), ("Musterstraße", "16"), ("Musterstrasse", "12"),
+    ("Musterstr", "12"), ("Musterstr.", "12"), ("Musterstraße", "16"), ("Musterstrasse", "12"),
     ("Beispielweg", "7a"), ("Testplatz", "3"), ("Testallee", "4"),
     ("Testgasse", "5"), ("Testring", "6"),
 ])
-def test_address_is_copied_as_written(rules, street, number):
-    result = OfflineProvider().understand(InboundEmail(body=f"Wasser bei {street} {number}, 2. OG links."), rules)
+@pytest.mark.parametrize("separator", [" ", ""])
+def test_address_is_copied_as_written(rules, street, number, separator):
+    result = OfflineProvider().understand(InboundEmail(body=f"Wasser bei {street}{separator}{number}, 2. OG links."), rules)
     assert result.extraction.street_raw == street
     assert result.extraction.house_no == number
 
@@ -288,3 +289,119 @@ def test_multiline_location_uncertainty_still_forces_review():
     assert case.understanding.extraction.side_raw == "links"
     assert case.status == Status.NEEDS_REVIEW
     assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+
+
+@pytest.mark.parametrize("body_address,subject_address", [
+    ("Musterstr 14", "Musterstraße 12"),
+    ("Musterstraße12", "Musterstr.14"),
+    ("Beispielweg7a", "Musterstrasse 12"),
+])
+def test_body_address_wins_and_conflicting_subject_forces_review(rules, body_address, subject_address):
+    email = InboundEmail(
+        subject=f"Wasserschaden Küche, {subject_address}",
+        body=f"Wasser läuft aus. {body_address}, zweite Etage links. Viele Grüße, Max Mustermann",
+        sender_email="max.mustermann@example.org",
+    )
+    extraction = OfflineProvider().understand(email, rules).extraction
+    assert extraction.street_raw + extraction.house_no == body_address.replace(" ", "")
+    assert extraction.location_alternatives == [subject_address]
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.status == Status.NEEDS_REVIEW
+    assert case.match.selected_contract is None
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.building_uncertain is True
+
+
+def test_bare_and_compact_equivalent_addresses_do_not_force_review(rules):
+    email = InboundEmail(subject="Musterstraße12", body="Musterstr 12, 2. OG links.")
+    extraction = OfflineProvider().understand(email, rules).extraction
+    assert extraction.street_raw == "Musterstr"
+    assert extraction.house_no == "12"
+    assert extraction.location_alternatives == []
+
+
+@pytest.mark.parametrize("sentence,evidence,building_uncertain", [
+    ("Bei der Etage bin ich unsicher", "Etage bin ich unsicher", False),
+    ("Die Hausnummer weiß ich nicht genau", "Hausnummer weiß ich nicht genau", True),
+    ("Die Hausnummer weiss ich nicht genau", "Hausnummer weiss ich nicht genau", True),
+    ("not sure about the floor", "not sure about the floor", False),
+    ("I am not sure about the address", "not sure about the address", True),
+])
+@pytest.mark.parametrize("before", [True, False])
+def test_separate_sentence_referring_to_location_forces_review(sentence, evidence, building_uncertain, before):
+    location = "Musterstr. 12, 2. OG links."
+    body = f"{sentence}. {location}" if before else f"{location} {sentence}."
+    email = InboundEmail(body=f"Wasser läuft aus. {body} Viele Grüße, Max Mustermann",
+                         sender_email="max.mustermann@example.org")
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.location_alternatives == [evidence]
+    assert evidence in email.body
+    assert case.status == Status.NEEDS_REVIEW
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.selected_contract is None
+    assert case.match.building_uncertain is building_uncertain
+
+
+@pytest.mark.parametrize("sentence", [
+    "Ich bin unsicher, ob die Versicherung zahlt",
+    "Die Deckung weiß ich nicht genau",
+    "not sure whether insurance pays",
+])
+@pytest.mark.parametrize("before", [True, False])
+def test_separate_sentence_with_unrelated_uncertainty_does_not_force_review(sentence, before):
+    location = "Musterstr. 12, 2. OG links."
+    body = f"{sentence}. {location}" if before else f"{location} {sentence}."
+    case = process(InboundEmail(body=f"Wasser läuft aus. {body} Viele Grüße, Max Mustermann"),
+                   Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.location_alternatives == []
+    assert case.status == Status.READY_FOR_APPROVAL
+
+
+def test_kaltmiete_question_is_routed_to_rent_accounting():
+    case = process(InboundEmail(
+        subject="Frage zur Kaltmiete",
+        body="Frage zur Kaltmiete. Musterstr. 12, 2. OG links. Viele Grüße, Max Mustermann",
+        sender_email="max.mustermann@example.org",
+    ), Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.classification.type == MessageType.ANFRAGE_MIETE
+    assert case.understanding.classification.category is None
+    assert case.status == Status.OUT_OF_SCOPE
+    assert case.internal_task.scope == "routing"
+    assert case.internal_task.assignee_role == "Mietbuchhaltung"
+
+
+@pytest.mark.parametrize("keyword,compound", [("kalt", "Kaltmiete"), ("sink", "sinking"),
+                                             ("door", "outdoor"), ("power", "powerbank"),
+                                             ("schloss", "abgeschlossen")])
+def test_category_terms_match_words_but_not_substrings(rules, keyword, compound):
+    provider = OfflineProvider()
+    result = provider.understand(InboundEmail(body=compound), rules)
+    assert result.classification.type != MessageType.SCHADENMELDUNG
+    assert result.classification.category is None
+    result = provider.understand(InboundEmail(body=f"({keyword.upper()})!"), rules)
+    assert result.classification.type == MessageType.SCHADENMELDUNG
+    assert result.classification.category is not None
+
+
+@pytest.mark.parametrize("keyword,category", [("Wasserschaden", "Wasserschaden"),
+                                             ("Heizungsausfall", "Heizungsausfall"),
+                                             ("Stromausfall", "Elektrik"),
+                                             ("verstopft", "Rohrverstopfung"),
+                                             ("Verstopfung", "Rohrverstopfung"),
+                                             ("Rohrverstopfung", "Rohrverstopfung")])
+def test_configured_compounds_and_inflections_keep_their_category(rules, keyword, category):
+    result = OfflineProvider().understand(InboundEmail(body=keyword), rules)
+    assert result.classification.type == MessageType.SCHADENMELDUNG
+    assert result.classification.category == category
+
+
+@pytest.mark.parametrize("sentence", ["Ich bin unsicher, ob die Versicherung zahlt",
+                                      "not sure whether insurance pays"])
+def test_unrelated_uncertainty_after_location_in_same_sentence_is_not_an_alternative(rules, sentence):
+    email = InboundEmail(body=f"Musterstr. 12, 2. OG links; {sentence}.")
+    assert OfflineProvider().understand(email, rules).extraction.location_alternatives == []
+
+
+def test_uncertainty_question_about_location_still_forces_review(rules):
+    email = InboundEmail(body="Ich bin unsicher, ob es die zweite Etage links ist. Musterstr. 12.")
+    assert OfflineProvider().understand(email, rules).extraction.location_alternatives == ["unsicher"]
