@@ -1,0 +1,27 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml
+node_modules/
+.DS_Store
+*.log
+
+# --- personal / interview material: never published (see docs/PLAN.md §18) ---
+CLAUDE.md
+TASK.md
+KICKOFF_PROMPT.md
+private/
+.claude/
+
+# --- runtime state ---
+var/
+.n8n-local/
+*.sqlite
+*.db
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
