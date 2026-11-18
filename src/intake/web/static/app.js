@@ -326,7 +326,9 @@ function urgencyPanel(c) {
 }
 
 function approvals(c) {
-  const ev = (c.audit || []).filter((a) => a.actor !== "system");
+  const all = c.audit || [];
+  const reset = all.map((a) => a.event.startsWith("neu verarbeitet (Regeln geändert)")).lastIndexOf(true);
+  const ev = all.slice(reset + 1).filter((a) => a.actor !== "system");
   const assignIdx = ev.map((a) => a.event).lastIndexOf("approve_assignment");
   const assignment = assignIdx >= 0 ? ev[assignIdx] : undefined;
   return {
@@ -550,7 +552,16 @@ async function act(btn) {
     }
     loadStore();
   } catch (e) {
-    if (e.status === 409) { try { cur.case = await api(`/api/cases/${encodeURIComponent(c.case_id)}`); renderCase(); } catch { /* keep view */ } }
+    if (e.status === 409 && /Regeln/.test(e.message)) {
+      // rules changed since processing: re-process with today's rules; earlier approvals become invalid
+      try {
+        cur.case = await api("/api/process", { email: c.input, scenario_id: c.processing?.scenario_id, provider: state.provider, store: true });
+        if (cur.kind === "scenario") state.results.set(cur.id, cur.case);
+        renderCase();
+        const el2 = $("#act-err"); if (el2) el2.textContent = "Die Regeln wurden geändert – der Vorgang wurde neu verarbeitet. Bitte erneut prüfen und freigeben.";
+        return;
+      } catch { /* fall through to message */ }
+    } else if (e.status === 409) { try { cur.case = await api(`/api/cases/${encodeURIComponent(c.case_id)}`); renderCase(); } catch { /* keep view */ } }
     const el = $("#act-err");
     if (el) el.textContent = e.status === 403 ? `Nicht erlaubt: ${e.message}` : e.status === 409 ? e.message : `Fehler: ${e.message}`;
   } finally {

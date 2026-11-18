@@ -46,6 +46,7 @@ class StepRequest(RequestModel):
     scenario_id: str | None = None
 
 
+SUPERSEDED = "neu verarbeitet (Regeln geändert) – frühere Freigaben gelten nicht mehr"
 ACTION_EVENTS = {"approve_assignment", "order_contractor", "object_action", "approve_reply", "choose_staff_option"}
 
 
@@ -103,19 +104,24 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             existing = app.state.store.get(case.case_id)
         except ValueError:
             raise HTTPException(422, "Ungültige Vorgangs-ID") from None
+        label = "in Prüfliste übernommen"
         if existing is not None:
-            if any(e.actor != "system" for e in existing.audit):
-                return existing  # a human already acted on it: never overwrite
+            old_gen, new_gen = existing.processing.generation, case.processing.generation
+            if old_gen is not None:
+                newer = new_gen is not None and new_gen > old_gen
+            else:
+                newer = bool(case.processed_at and (existing.processed_at is None or case.processed_at > existing.processed_at))
+            if not newer:
+                return existing  # a run that STARTED earlier never overwrites a newer one, however late it finishes
             volatile = {"audit": True, "processed_at": True, "received_at": True, "processing": {"generation"}}
             if existing.model_dump(exclude=volatile) == case.model_dump(exclude=volatile):
-                return existing  # same result: idempotent
-            old_gen, new_gen = existing.processing.generation, case.processing.generation
-            if old_gen is not None and (new_gen is None or new_gen <= old_gen):
-                return existing  # a run that STARTED earlier never overwrites a newer one, however late it finishes
-            if old_gen is None and existing.processed_at and (case.processed_at is None or case.processed_at <= existing.processed_at):
-                return existing
+                existing.processing.generation = new_gen  # same result: keep it, but advance the watermark
+                return app.state.store.save(existing)
+            human = any(e.actor != "system" for e in existing.audit)
+            if human and case.processing.rules_version == existing.processing.rules_version:
+                return existing  # a human already acted and the rules did not change: frozen
+            label = (SUPERSEDED if human else "neu verarbeitet (Regeln oder Leser geändert)")
         case = case.model_copy(deep=True)
-        label = "in Prüfliste übernommen" if existing is None else "neu verarbeitet (Regeln oder Leser geändert)"
         event = AuditEvent(ts=datetime.now(timezone.utc), actor="system", event=label,
                            details={"case_id": case.case_id})
         if existing is not None:

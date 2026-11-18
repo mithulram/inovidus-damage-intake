@@ -56,10 +56,15 @@ def apply_human_assignment(case: CaseRecord, contract_id: str, ctx: Context) -> 
     view.match.selected_contract = contract_id
     view.match.winner = contract_id
     view.status = Status.READY_FOR_APPROVAL
+    contract = ctx.erp.contract(contract_id)
+    registered = (contract.contact.email or "").strip().lower() if contract else ""
+    sender = (case.input.sender_email or "").strip().lower()
+    view.match.unknown_sender = bool(sender) and sender != registered
     view = STEPS["prior_cases"](view, ctx)
     view = STEPS["task"](view, ctx)
     out = case.model_copy(deep=True)
     out.match.approved_contract = contract_id
     out.prior_cases = view.prior_cases
     out.internal_task = view.internal_task
+    out.staff_options = view.staff_options  # contact options belong to the approved contract
     return out

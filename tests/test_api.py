@@ -114,7 +114,9 @@ def test_process_store_true_enters_review_inbox_once(client):
     case = process(client, store=True)
     assert case["audit"][-1]["event"] == "in Prüfliste übernommen"
     assert client.get(f"/api/cases/{case['case_id']}").json() == case
-    assert process(client, store=True) == case
+    again = process(client, store=True)
+    assert again["processing"]["generation"] >= case["processing"]["generation"]  # watermark advances
+    assert {k: v for k, v in again.items() if k != "processing"} == {k: v for k, v in case.items() if k != "processing"}
     assert len(client.get("/api/audit").json()) == 1
 
 

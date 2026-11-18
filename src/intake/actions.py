@@ -66,7 +66,10 @@ def execute(case: CaseRecord, approval: Approval, audit: AuditLog) -> CaseRecord
                 and not approval.reason):
             raise PermissionError("Manuelle Zuordnung braucht eine Begründung")
         if action == "order_contractor":
-            current = [e for e in case.audit if e.event == "approve_assignment" and e.actor != "system"
+            # only approvals given after the last re-processing count
+            start = max((i for i, e in enumerate(case.audit) if e.event.startswith("neu verarbeitet (Regeln geändert)")),
+                        default=-1) + 1
+            current = [e for e in case.audit[start:] if e.event == "approve_assignment" and e.actor != "system"
                        and e.details.get("case_id") == case.case_id]
             if (not current or current[-1].details.get("contract_id") != approval.contract_id
                     or case.match.approved_contract != approval.contract_id):

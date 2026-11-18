@@ -227,7 +227,12 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
             r"|adresse|anschrift|hausnummer|hausnr|haus\b|gebäude|gebaeude|objekt"
             r"|address|house|street|building",
             re.IGNORECASE)
-        building_uncertain = any(street_word.search(alt) for alt in ext.location_alternatives)
+        unit_word = re.compile(r"\b(og|eg|dg|ug|etage|stock|stockwerk|geschoss|floor|links|rechts|li\.?|re\.?|mitte|left|right)\b",
+                               re.IGNORECASE)
+        # Fail-safe: doubt counts as doubt about the BUILDING unless it clearly concerns only floor/side.
+        bare_floor = re.compile(r"^\s*\d+\s*\.?\s*$")  # "2." from "2. oder 3. OG"
+        building_uncertain = any(street_word.search(alt) or not (unit_word.search(alt) or bare_floor.match(alt))
+                                 for alt in ext.location_alternatives)
         if building_uncertain:
             object_id = None
 

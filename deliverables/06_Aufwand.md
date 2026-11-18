@@ -18,15 +18,21 @@ Nur die Zeilen, die im Timelog als **Core** markiert sind:
 
 Der Kern lag damit **deutlich unter 90 Minuten**. Meine eigene Zeit zum Lesen und Prüfen ist darin nicht enthalten.
 
-## 2. Gesamter Zeitraum (Uhrzeit von Anfang bis Ende)
+## 2. Gesamter Zeitraum und aktive Arbeitszeit
 
-19:08 bis ca. 22:00 = **ca. 2 Stunden 50 Minuten**. Darin enthalten (alles als **Extra** im Timelog markiert):
+| Maß | Wert |
+|---|---|
+| Kalender-Zeitraum | 18.11.2026, 19:08 bis 19.11.2026, ca. 01:00 |
+| davon **Wartezeit** (Codex-Nutzungsgrenze erreicht, Pause) | ca. 22:00 bis 00:17 = ca. 2 h 15 min |
+| **Aktive Arbeitszeit** (KI-gestützt, Zeitraum ohne Wartezeit) | ca. **3 h 35 min** (19:08–22:00 und 00:17–ca. 01:00) |
+
+Alles außerhalb des Kerns ist im Timelog als **Extra** markiert:
 - meine Entscheidungen zu offenen Fragen und die Installation der Design-Werkzeuge (19:21–20:07),
 - Groq-Anbindung, API, Oberfläche, n8n-Workflow, Bildschirmfotos,
-- vier unabhängige Code-Prüfungen durch Codex und die Korrekturen,
+- sechs unabhängige Code-Prüfungen durch Codex und die Korrekturen,
 - Unterlagen und Beispiele.
 
-Weil Claude und Codex teilweise gleichzeitig gearbeitet haben, ist die Summe der einzelnen Timelog-Zeilen größer als dieser Zeitraum.
+Weil Claude und Codex teilweise gleichzeitig gearbeitet haben, ist die Summe der einzelnen Timelog-Zeilen größer als die aktive Arbeitszeit.
 
 ## 3. Meine eigene Zeit
 

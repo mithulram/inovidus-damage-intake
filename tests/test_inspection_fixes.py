@@ -344,3 +344,60 @@ def test_approval_refused_when_rules_changed(client):
 def test_compact_street_and_number_counts_as_building_uncertainty():
     r = match(ext(location_alternatives=["Vielleicht Musterstraße12"]), InboundEmail(body="x"), JsonERP(), RULES)
     assert r.building_uncertain is True and r.object_id is None
+
+
+# ---- round 6 ---------------------------------------------------------------
+
+# R6-01 – doubt without a floor/side reference is treated as doubt about the building (fail-safe)
+def test_unspecific_doubt_blocks_building_action(client):
+    email = {"subject": "Gasgeruch", "body": "Gasgeruch. Musterstr. 12; ich bin unsicher. Viele Grüße, Max Mustermann"}
+    case = client.post("/api/process", json={"email": email, "store": True}).json()
+    assert case["match"]["object_id"] is None and case["internal_task"]["scope"] != "object"
+    assert client.post("/api/approve", json={"case_id": case["case_id"], "actor": "X", "action": "object_action"}).status_code == 403
+
+
+def test_floor_only_doubt_keeps_building():
+    r = match(ext(location_alternatives=["3. OG rechts"]), InboundEmail(body="x"), JsonERP(), RULES)
+    assert r.building_uncertain is False and r.object_id == "OBJ-MS12"
+
+
+# R6-02 – after a human action and a rule change, re-processing supersedes the proposal and voids old approvals
+def test_reprocess_after_rule_change_supersedes_and_voids_approvals(client, monkeypatch):
+    import intake.web.app as app_module
+    from intake.rules import load_rules as real_load
+    case = stored(client, "S1")
+    client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                      "contract_id": "MV-10245"})
+    changed = lambda overrides=None, path=None: real_load(path, {**(overrides or {}), "match": {"threshold": 0.95}})
+    monkeypatch.setattr("intake.context.load_rules", changed)
+    blocked = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "order_contractor",
+                                                "contract_id": "MV-10245"})
+    assert blocked.status_code == 409
+    sc = scenario("S1")
+    new = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1", "store": True}).json()
+    assert new["status"] == "NEEDS_REVIEW"  # 0.90 < 0.95
+    assert new["audit"][-1]["event"].startswith("neu verarbeitet (Regeln geändert)")
+    assert any(e["event"] == "approve_assignment" for e in new["audit"])  # history kept
+    stale = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "order_contractor",
+                                              "contract_id": "MV-10245", "reason": "alt"})
+    assert stale.status_code == 403  # the old approval no longer counts
+
+
+# R6-03 – the generation watermark advances even when the result is unchanged
+def test_watermark_blocks_older_run_after_identical_newer_run(client):
+    sc = scenario("S1")
+    first = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1", "store": True}).json()
+    slow_old = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1", "provider": "recorded"}).json()
+    client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1", "store": True})  # newest, identical
+    slow_old["warnings"] = [*slow_old["warnings"], "langsam"]
+    kept = client.post("/api/cases", json=slow_old).json()
+    assert "langsam" not in kept["warnings"] and kept["processing"]["provider"] == first["processing"]["provider"]
+
+
+# R6-04 – staff options follow the human-approved contract
+def test_staff_options_follow_manual_assignment(client):
+    case = stored(client, "S4b")
+    out = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                            "contract_id": "MV-10112", "reason": "Erika ist Mieterin im EG"}).json()
+    call = next((o for o in out["staff_options"] if o["code"] == "call_tenant"), None)
+    assert call is None or (call["available"] is False and not call.get("detail"))
