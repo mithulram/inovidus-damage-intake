@@ -105,6 +105,24 @@ def test_no_candidate_produces_no_prior_cases():
     assert run(make_case(ctx), ctx).prior_cases == []
 
 
+def test_s02_ambiguous_stage_a_shows_both_contract_histories():
+    from intake.scenarios import load_scenario, run_scenario
+
+    case, _ = run_scenario(load_scenario("scenarios/S02_no_unit.yaml"), provider="offline")
+    assert {Gate.THRESHOLD, Gate.MARGIN} & set(case.match.failed_gates)
+    assert {p.contract_id for p in case.prior_cases} == {"MV-10245", "MV-10487"}
+
+
+@pytest.mark.parametrize("gate", [Gate.THRESHOLD, Gate.MARGIN])
+def test_ambiguous_stage_a_ignores_arbitrary_winner_but_selected_still_wins(gate):
+    ctx = context()
+    case = make_case(ctx, winner="MV-10245", contract_ids=["MV-10245", "MV-10487"])
+    case.match.failed_gates = [gate]
+    assert {p.contract_id for p in run(case, ctx).prior_cases} == {"MV-10245", "MV-10487"}
+    case.match.selected_contract = "MV-10487"
+    assert {p.contract_id for p in run(case, ctx).prior_cases} == {"MV-10487"}
+
+
 @pytest.mark.parametrize("missing", ["match", "understanding"])
 def test_lookup_requires_matching_and_understanding(missing):
     ctx = context()

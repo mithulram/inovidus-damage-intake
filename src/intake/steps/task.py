@@ -49,11 +49,13 @@ def run(case: CaseRecord, ctx: Context) -> CaseRecord:
         gates = "; ".join(f.message for f in match.flags) or t["default_gate"]
         object_scope = urgency.level == Urgency.NOTFALL and bool(match.object_id)
         prefix = "object" if object_scope else "clarification"
+        building = next((p for p in ctx.erp.properties() if p.object_id == match.object_id), None)
+        address = f"{building.street} {building.house_no}" if building else t["unknown_address"]
         task = InternalTask(
-            title=t[prefix + "_title"].format(gates=gates, object_id=match.object_id),
+            title=t[prefix + "_title"].format(gates=gates, address=address),
             scope=prefix, assignee_role=t[prefix + "_assignee"],
             priority=urgency.level, due_hours=urgency.due_hours,
-            object_id=match.object_id if object_scope else None, checklist=list(t[prefix]),
+            object_id=match.object_id, checklist=list(t[prefix]),
             related_cases=[p.case_id for p in related],
         )
     case.internal_task = task

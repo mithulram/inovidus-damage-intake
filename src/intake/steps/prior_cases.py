@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..context import Context
-from ..models import CaseRecord, PriorCase
+from ..models import CaseRecord, Gate, PriorCase
 from ..normalize import fold
 
 
@@ -12,8 +12,12 @@ def run(case: CaseRecord, ctx: Context) -> CaseRecord:
         raise ValueError("Schritt 'prior_cases' braucht Verständnis und Zuordnung")
     case = case.model_copy(deep=True)
     match = case.match
-    contract_id = match.selected_contract or match.winner
-    ids = [contract_id] if contract_id else [c.contract_id for c in match.candidates if not c.vetoes and not c.veto_gates][:3]
+    if match.selected_contract:
+        ids = [match.selected_contract]
+    elif {Gate.THRESHOLD, Gate.MARGIN} & set(match.failed_gates) or not match.winner:
+        ids = [c.contract_id for c in match.candidates if not c.vetoes and not c.veto_gates][:3]
+    else:
+        ids = [match.winner]
     category = case.understanding.classification.category
     room = case.understanding.extraction.room
     related_categories = ctx.rules.prior_cases.related_categories.get(category, [])

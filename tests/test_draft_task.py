@@ -124,6 +124,8 @@ def test_review_emergency_is_object_scope_only_with_known_building_and_safety_pr
     assert internal.due_hours == 2
     assert internal.requires_approval is True
     if known_building:
+        assert "Musterstraße 12" in internal.title
+        assert "OBJ-MS12" not in internal.title
         assert any("Notdienst" in item and "Gebäude" in item for item in internal.checklist)
         assert any("Hausmeister" in item for item in internal.checklist)
     reply = render_reply(result, ctx)
@@ -133,6 +135,14 @@ def test_review_emergency_is_object_scope_only_with_known_building_and_safety_pr
     assert positions and positions == sorted(positions)
     assert all(position < promise for position in positions)
     assert "Max Mustermann" not in reply.body and "MV-" not in reply.body
+
+
+def test_clarification_title_uses_address_and_keeps_object_id(ctx):
+    case = damage_case(ctx, body="Wasser läuft in Musterstraße 12. Max Mustermann")
+    assert case.internal_task.scope == "clarification"
+    assert "Musterstraße 12" in case.internal_task.title
+    assert "OBJ-MS12" not in case.internal_task.title
+    assert case.internal_task.object_id == "OBJ-MS12"
 
 
 def test_contract_task_contains_deadline_photos_caretaker_and_related_history(ctx):

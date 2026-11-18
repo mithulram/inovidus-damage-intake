@@ -56,13 +56,14 @@ task:
   caretaker: "Hausmeister informieren"
   prior_case: "Zusammenhang mit '{title}' ({case_id}, erledigt durch {contractor}) prüfen – ggf. Gewährleistung"
   emergency: "Notdienst sofort beauftragen"
-  clarification_title: "Zuordnung klären: {gates}"
+  clarification_title: "Zuordnung klären – {address}: {gates}"
+  unknown_address: "Adresse unbekannt"
   clarification_assignee: "Sachbearbeitung"
   clarification:
     - "Kandidaten und Zuordnungsgründe vergleichen"
     - "Vorbereitete Rückfrage an den Mieter nach Freigabe übermitteln"
     - "Vertragsinhaber und Einheit klären; Entscheidung begründen und protokollieren"
-  object_title: "Notfall im Gebäude bearbeiten – {object_id}; Zuordnung klären: {gates}"
+  object_title: "Notfall im Gebäude bearbeiten – {address}; Zuordnung klären: {gates}"
   object_assignee: "Technik / Notdienst"
   object:
     - "Notdienst sofort zum Gebäude beauftragen"
