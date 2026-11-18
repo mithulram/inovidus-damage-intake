@@ -1,0 +1,364 @@
+{
+  "case_id": "SM-20261118-C47379",
+  "received_at": "2026-11-18T09:00:00+01:00",
+  "processed_at": "2026-11-18T09:00:00+01:00",
+  "processing": {
+    "provider": "recorded(groq)",
+    "model": "openai/gpt-oss-120b",
+    "rules_version": "sha256:63099795bf3f",
+    "fallback_used": false,
+    "scenario_id": "S1"
+  },
+  "input": {
+    "message_id": null,
+    "subject": "Wasserschaden Küche, Musterstraße 12",
+    "body": "Hallo, seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen. Wir wohnen in der Musterstr. 12, zweite Etage links. Bitte dringend jemanden schicken. Fotos sind vorhanden. Viele Grüße, Max Mustermann\n",
+    "sender_email": null,
+    "sender_display_name": null,
+    "received_at": null,
+    "attachments": []
+  },
+  "understanding": {
+    "classification": {
+      "type": "SCHADENMELDUNG",
+      "category": "Wasserschaden",
+      "trade": "Sanitär",
+      "confidence": 1.0,
+      "reason": "Wasserschaden in der Küche, Wasser läuft unter der Spüle und hat den Unterschrank aufgequollen."
+    },
+    "extraction": {
+      "tenant_name": "Max Mustermann",
+      "sender_name": "Max Mustermann",
+      "street_raw": "Musterstr.",
+      "house_no": "12",
+      "floor_raw": "zweite Etage",
+      "side_raw": "links",
+      "room": "Küche",
+      "damage_description": "seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen.",
+      "since": "seit gestern",
+      "photos_mentioned": true,
+      "phone": null,
+      "language": "de",
+      "location_alternatives": []
+    },
+    "urgency_hint": "DRINGEND",
+    "urgency_hint_reason": "Wasser läuft seit gestern unter der Spüle und hat bereits den Unterschrank aufgequollen, der Schaden kann sich weiter ausbreiten.",
+    "provider": "recorded(groq)",
+    "model": "openai/gpt-oss-120b",
+    "fallback_used": false,
+    "warnings": []
+  },
+  "match": {
+    "location": {
+      "street": "musterstrasse",
+      "house_no": "12",
+      "floor": 2,
+      "floor_status": "ok",
+      "floor_note": "'zweite Etage' = 2. OG",
+      "side": "L"
+    },
+    "candidates": [
+      {
+        "contract_id": "MV-10245",
+        "tenant_name": "Max Mustermann",
+        "unit_label": "Musterstraße 12, 2. OG li.",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-2L",
+        "active": true,
+        "score": 0.9,
+        "signals": [
+          {
+            "name": "name",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Max Mustermann",
+            "erp_value": "Max Mustermann",
+            "reason": "Name stimmt überein (100 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstr. 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstr. 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "match",
+            "weight": 0.2,
+            "points": 0.2,
+            "email_value": "zweite Etage",
+            "erp_value": "2. OG",
+            "reason": "'zweite Etage' = 2. OG"
+          },
+          {
+            "name": "side",
+            "result": "match",
+            "weight": 0.1,
+            "points": 0.1,
+            "email_value": "links",
+            "erp_value": "li.",
+            "reason": "'links' = li."
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "max.mustermann@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [],
+        "veto_gates": []
+      },
+      {
+        "contract_id": "MV-10487",
+        "tenant_name": "Max Mustermann",
+        "unit_label": "Musterstraße 12, 3. OG rechts",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-3R",
+        "active": true,
+        "score": 0.6,
+        "signals": [
+          {
+            "name": "name",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Max Mustermann",
+            "erp_value": "Max Mustermann",
+            "reason": "Name stimmt überein (100 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstr. 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstr. 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "mismatch",
+            "weight": 0.2,
+            "points": 0.0,
+            "email_value": "zweite Etage",
+            "erp_value": "3. OG",
+            "reason": "Etage widerspricht: 2. OG ≠ 3. OG"
+          },
+          {
+            "name": "side",
+            "result": "mismatch",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": "links",
+            "erp_value": "rechts",
+            "reason": "Seite widerspricht: links ≠ rechts"
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "max.mustermann@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [
+          "Etage widerspricht: 2. OG ≠ 3. OG",
+          "Seite widerspricht: links ≠ rechts"
+        ],
+        "veto_gates": [
+          "veto_unit"
+        ]
+      },
+      {
+        "contract_id": "MV-10112",
+        "tenant_name": "Erika Musterfrau",
+        "unit_label": "Musterstraße 12, EG re.",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-0R",
+        "active": true,
+        "score": 0.3,
+        "signals": [
+          {
+            "name": "name",
+            "result": "mismatch",
+            "weight": 0.3,
+            "points": 0.0,
+            "email_value": "Max Mustermann",
+            "erp_value": "Erika Musterfrau",
+            "reason": "Anderer Name (60 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstr. 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstr. 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "mismatch",
+            "weight": 0.2,
+            "points": 0.0,
+            "email_value": "zweite Etage",
+            "erp_value": "EG",
+            "reason": "Etage widerspricht: 2. OG ≠ EG"
+          },
+          {
+            "name": "side",
+            "result": "mismatch",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": "links",
+            "erp_value": "re.",
+            "reason": "Seite widerspricht: links ≠ re."
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "erika.musterfrau@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [
+          "Etage widerspricht: 2. OG ≠ EG",
+          "Seite widerspricht: links ≠ re."
+        ],
+        "veto_gates": [
+          "veto_unit"
+        ]
+      }
+    ],
+    "winner": "MV-10245",
+    "selected_contract": "MV-10245",
+    "score": 0.9,
+    "margin": 0.9,
+    "failed_gates": [],
+    "flags": [],
+    "object_id": "OBJ-MS12",
+    "unknown_sender": false,
+    "building_uncertain": false,
+    "approved_contract": null,
+    "reason": "Eindeutig: MV-10245 (Musterstraße 12, 2. OG li.) mit 0.90 Punkten, Abstand 0.90. Bitte prüfen und freigeben."
+  },
+  "prior_cases": [
+    {
+      "case_id": "VG-2026-0412",
+      "contract_id": "MV-10245",
+      "title": "Rohrverstopfung Küche",
+      "category": "Rohrverstopfung",
+      "room": "Küche",
+      "state": "closed",
+      "closed_at": "2026-08-05",
+      "contractor": "Sanitär Beispiel GmbH",
+      "related": true,
+      "possible_duplicate": false,
+      "reason": "gleiche Einheit, gleicher Raum (Küche), verwandte Schadenart"
+    }
+  ],
+  "urgency": {
+    "level": "DRINGEND",
+    "rule_level": "DRINGEND",
+    "llm_level": "DRINGEND",
+    "triggers": [
+      "Wasser tritt aus (Schaden schreitet fort)",
+      "Folgeschaden sichtbar"
+    ],
+    "tenant_says_urgent": true,
+    "response_target": "Handwerker innerhalb von 24 Stunden",
+    "due_hours": 24,
+    "safety_instructions": [],
+    "reason": "Regel-Untergrenze: DRINGEND; Wasser tritt aus (Schaden schreitet fort), Folgeschaden sichtbar. KI-Hinweis: DRINGEND; die strengere Einstufung gewinnt."
+  },
+  "status": "READY_FOR_APPROVAL",
+  "reply_draft": {
+    "language": "de",
+    "variant": "standard",
+    "to": null,
+    "subject": "Re: Wasserschaden Küche, Musterstraße 12",
+    "body": "Guten Tag,\n\nvielen Dank für Ihre Nachricht. Wir haben Ihre Schadenmeldung erhalten.\n\nUnser Ziel für die Rückmeldung bzw. Bearbeitung: Handwerker innerhalb von 24 Stunden.\n\nSie erwähnen Fotos; diese waren nicht beigefügt. Bitte senden Sie uns die Fotos noch zu.\n\nFreundliche Grüße\nIhre Hausverwaltung",
+    "auto_send": false
+  },
+  "internal_task": {
+    "title": "Sanitär-Handwerker beauftragen – Wasserschaden Küche (MV-10245)",
+    "scope": "contract",
+    "assignee_role": "Technik / Sanitär",
+    "priority": "DRINGEND",
+    "due_hours": 24,
+    "contract_id": "MV-10245",
+    "object_id": "OBJ-MS12",
+    "checklist": [
+      "Handwerker beauftragen – Ziel: Handwerker innerhalb von 24 Stunden",
+      "Erwähnte Fotos anfordern bzw. beigefügte Fotos prüfen",
+      "Hausmeister informieren",
+      "Zusammenhang mit 'Rohrverstopfung Küche' (VG-2026-0412, erledigt durch Sanitär Beispiel GmbH) prüfen – ggf. Gewährleistung"
+    ],
+    "related_cases": [
+      "VG-2026-0412"
+    ],
+    "requires_approval": true
+  },
+  "staff_options": [],
+  "warnings": [],
+  "audit": [
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "eingegangen",
+      "details": {
+        "subject": "Wasserschaden Küche, Musterstraße 12",
+        "sender": null
+      }
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:understand",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:match",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:prior_cases",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:urgency",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:draft",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:task",
+      "details": {}
+    }
+  ]
+}

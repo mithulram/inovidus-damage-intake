@@ -1,0 +1,370 @@
+{
+  "case_id": "SM-20261118-D53546",
+  "received_at": "2026-11-18T09:00:00+01:00",
+  "processed_at": "2026-11-18T09:00:00+01:00",
+  "processing": {
+    "provider": "recorded(groq)",
+    "model": "openai/gpt-oss-120b",
+    "rules_version": "sha256:63099795bf3f",
+    "fallback_used": false,
+    "scenario_id": "S7"
+  },
+  "input": {
+    "message_id": null,
+    "subject": "Water damage kitchen",
+    "body": "Hello, since yesterday water is leaking under our kitchen sink and the cabinet is already swollen. We live at Musterstrasse 12, 2nd floor left. Please send someone. Best regards, Max Mustermann\n",
+    "sender_email": null,
+    "sender_display_name": null,
+    "received_at": null,
+    "attachments": []
+  },
+  "understanding": {
+    "classification": {
+      "type": "SCHADENMELDUNG",
+      "category": "Wasserschaden",
+      "trade": "Sanitär",
+      "confidence": 0.99,
+      "reason": "Wasserschaden in der Küche, Leck unter der Spüle"
+    },
+    "extraction": {
+      "tenant_name": null,
+      "sender_name": "Max Mustermann",
+      "street_raw": "Musterstrasse",
+      "house_no": "12",
+      "floor_raw": "2nd floor",
+      "side_raw": "left",
+      "room": null,
+      "damage_description": "water is leaking under our kitchen sink and the cabinet is already swollen",
+      "since": "yesterday",
+      "photos_mentioned": false,
+      "phone": null,
+      "language": "en",
+      "location_alternatives": []
+    },
+    "urgency_hint": "DRINGEND",
+    "urgency_hint_reason": "Das Wasserleck kann zu weiteren Schäden führen, daher sollte zeitnah ein Handwerker kommen.",
+    "provider": "recorded(groq)",
+    "model": "openai/gpt-oss-120b",
+    "fallback_used": false,
+    "warnings": []
+  },
+  "match": {
+    "location": {
+      "street": "musterstrasse",
+      "house_no": "12",
+      "floor": 2,
+      "floor_status": "english_ordinal",
+      "floor_note": "'2nd floor' als 2. OG gelesen (britische/europäische Zählweise); in US-Zählweise wäre es das 1. OG",
+      "side": "L"
+    },
+    "candidates": [
+      {
+        "contract_id": "MV-10245",
+        "tenant_name": "Max Mustermann",
+        "unit_label": "Musterstraße 12, 2. OG li.",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-2L",
+        "active": true,
+        "score": 0.9,
+        "signals": [
+          {
+            "name": "name",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Max Mustermann",
+            "erp_value": "Max Mustermann",
+            "reason": "Name stimmt überein (100 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstrasse 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstrasse 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "match",
+            "weight": 0.2,
+            "points": 0.2,
+            "email_value": "2nd floor",
+            "erp_value": "2. OG",
+            "reason": "'2nd floor' = 2. OG"
+          },
+          {
+            "name": "side",
+            "result": "match",
+            "weight": 0.1,
+            "points": 0.1,
+            "email_value": "left",
+            "erp_value": "li.",
+            "reason": "'left' = li."
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "max.mustermann@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [],
+        "veto_gates": []
+      },
+      {
+        "contract_id": "MV-10487",
+        "tenant_name": "Max Mustermann",
+        "unit_label": "Musterstraße 12, 3. OG rechts",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-3R",
+        "active": true,
+        "score": 0.6,
+        "signals": [
+          {
+            "name": "name",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Max Mustermann",
+            "erp_value": "Max Mustermann",
+            "reason": "Name stimmt überein (100 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstrasse 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstrasse 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "mismatch",
+            "weight": 0.2,
+            "points": 0.0,
+            "email_value": "2nd floor",
+            "erp_value": "3. OG",
+            "reason": "Etage widerspricht: 2. OG ≠ 3. OG"
+          },
+          {
+            "name": "side",
+            "result": "mismatch",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": "left",
+            "erp_value": "rechts",
+            "reason": "Seite widerspricht: links ≠ rechts"
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "max.mustermann@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [
+          "Etage widerspricht: 2. OG ≠ 3. OG",
+          "Seite widerspricht: links ≠ rechts"
+        ],
+        "veto_gates": [
+          "veto_unit"
+        ]
+      },
+      {
+        "contract_id": "MV-10112",
+        "tenant_name": "Erika Musterfrau",
+        "unit_label": "Musterstraße 12, EG re.",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-0R",
+        "active": true,
+        "score": 0.3,
+        "signals": [
+          {
+            "name": "name",
+            "result": "mismatch",
+            "weight": 0.3,
+            "points": 0.0,
+            "email_value": "Max Mustermann",
+            "erp_value": "Erika Musterfrau",
+            "reason": "Anderer Name (60 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstrasse 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstrasse 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "mismatch",
+            "weight": 0.2,
+            "points": 0.0,
+            "email_value": "2nd floor",
+            "erp_value": "EG",
+            "reason": "Etage widerspricht: 2. OG ≠ EG"
+          },
+          {
+            "name": "side",
+            "result": "mismatch",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": "left",
+            "erp_value": "re.",
+            "reason": "Seite widerspricht: links ≠ re."
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "erika.musterfrau@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [
+          "Etage widerspricht: 2. OG ≠ EG",
+          "Seite widerspricht: links ≠ re."
+        ],
+        "veto_gates": [
+          "veto_unit"
+        ]
+      }
+    ],
+    "winner": "MV-10245",
+    "selected_contract": null,
+    "score": 0.9,
+    "margin": 0.9,
+    "failed_gates": [
+      "floor_ambiguous"
+    ],
+    "flags": [
+      {
+        "gate": "floor_ambiguous",
+        "message": "Zählweise der Etage unklar: '2nd floor' als 2. OG gelesen (britische/europäische Zählweise); in US-Zählweise wäre es das 1. OG"
+      }
+    ],
+    "object_id": "OBJ-MS12",
+    "unknown_sender": false,
+    "building_uncertain": false,
+    "approved_contract": null,
+    "reason": "Prüfung nötig: Zählweise der Etage unklar: '2nd floor' als 2. OG gelesen (britische/europäische Zählweise); in US-Zählweise wäre es das 1. OG"
+  },
+  "prior_cases": [
+    {
+      "case_id": "VG-2026-0412",
+      "contract_id": "MV-10245",
+      "title": "Rohrverstopfung Küche",
+      "category": "Rohrverstopfung",
+      "room": "Küche",
+      "state": "closed",
+      "closed_at": "2026-08-05",
+      "contractor": "Sanitär Beispiel GmbH",
+      "related": true,
+      "possible_duplicate": false,
+      "reason": "gleiche Einheit, verwandte Schadenart"
+    }
+  ],
+  "urgency": {
+    "level": "DRINGEND",
+    "rule_level": "DRINGEND",
+    "llm_level": "DRINGEND",
+    "triggers": [
+      "Wasser tritt aus (Schaden schreitet fort)",
+      "Folgeschaden sichtbar"
+    ],
+    "tenant_says_urgent": false,
+    "response_target": "Handwerker innerhalb von 24 Stunden",
+    "due_hours": 24,
+    "safety_instructions": [],
+    "reason": "Regel-Untergrenze: DRINGEND; Wasser tritt aus (Schaden schreitet fort), Folgeschaden sichtbar. KI-Hinweis: DRINGEND; die strengere Einstufung gewinnt."
+  },
+  "status": "NEEDS_REVIEW",
+  "reply_draft": {
+    "language": "en",
+    "variant": "confirm_unit",
+    "to": null,
+    "subject": "Re: Water damage kitchen",
+    "body": "Hello,\n\nThank you for your message. We have received your damage report.\n\nPlease confirm the exact location of your apartment: full address, floor and apartment side (left, right or centre). We use German floor numbering: ground floor = EG, the floor above = 1. OG.\n\nKind regards,\nYour property management team",
+    "auto_send": false
+  },
+  "internal_task": {
+    "title": "Zuordnung klären – Musterstraße 12: Zählweise der Etage unklar: '2nd floor' als 2. OG gelesen (britische/europäische Zählweise); in US-Zählweise wäre es das 1. OG",
+    "scope": "clarification",
+    "assignee_role": "Sachbearbeitung",
+    "priority": "DRINGEND",
+    "due_hours": 24,
+    "contract_id": null,
+    "object_id": "OBJ-MS12",
+    "checklist": [
+      "Kandidaten und Zuordnungsgründe vergleichen",
+      "Vorbereitete Rückfrage an den Mieter nach Freigabe übermitteln",
+      "Vertragsinhaber und Einheit klären; Entscheidung begründen und protokollieren"
+    ],
+    "related_cases": [
+      "VG-2026-0412"
+    ],
+    "requires_approval": true
+  },
+  "staff_options": [],
+  "warnings": [],
+  "audit": [
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "eingegangen",
+      "details": {
+        "subject": "Water damage kitchen",
+        "sender": null
+      }
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:understand",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:match",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:prior_cases",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:urgency",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:draft",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:task",
+      "details": {}
+    }
+  ]
+}

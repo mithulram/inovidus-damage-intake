@@ -1,0 +1,383 @@
+{
+  "case_id": "SM-20261118-4F5C7A",
+  "received_at": "2026-11-18T09:00:00+01:00",
+  "processed_at": "2026-11-18T09:00:00+01:00",
+  "processing": {
+    "provider": "offline",
+    "model": null,
+    "rules_version": "sha256:63099795bf3f",
+    "fallback_used": false,
+    "scenario_id": "S2"
+  },
+  "input": {
+    "message_id": null,
+    "subject": "Wasserschaden Küche, Musterstraße 12",
+    "body": "Hallo, seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen. Wir wohnen in der Musterstr. 12. Bitte dringend jemanden schicken. Fotos sind vorhanden. Viele Grüße, Max Mustermann\n",
+    "sender_email": null,
+    "sender_display_name": null,
+    "received_at": null,
+    "attachments": []
+  },
+  "understanding": {
+    "classification": {
+      "type": "SCHADENMELDUNG",
+      "category": "Wasserschaden",
+      "trade": "Sanitär",
+      "confidence": 0.9,
+      "reason": "Regelmodus; gefundene Schlüsselwörter: schaden, wasser, läuft, wasserschaden, spüle, aufgequollen, läuft wasser, wasser unter."
+    },
+    "extraction": {
+      "tenant_name": "Max Mustermann",
+      "sender_name": "Max Mustermann",
+      "street_raw": "Musterstr.",
+      "house_no": "12",
+      "floor_raw": null,
+      "side_raw": null,
+      "room": "Küche",
+      "damage_description": "Hallo, seit gestern läuft Wasser unter unserer Spüle aus.",
+      "since": "seit gestern",
+      "photos_mentioned": true,
+      "phone": null,
+      "language": "de",
+      "location_alternatives": []
+    },
+    "urgency_hint": null,
+    "urgency_hint_reason": null,
+    "provider": "offline",
+    "model": null,
+    "fallback_used": false,
+    "warnings": []
+  },
+  "match": {
+    "location": {
+      "street": "musterstrasse",
+      "house_no": "12",
+      "floor": null,
+      "floor_status": "missing",
+      "floor_note": "Keine Etage angegeben",
+      "side": null
+    },
+    "candidates": [
+      {
+        "contract_id": "MV-10245",
+        "tenant_name": "Max Mustermann",
+        "unit_label": "Musterstraße 12, 2. OG li.",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-2L",
+        "active": true,
+        "score": 0.6,
+        "signals": [
+          {
+            "name": "name",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Max Mustermann",
+            "erp_value": "Max Mustermann",
+            "reason": "Name stimmt überein (100 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstr. 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstr. 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "missing",
+            "weight": 0.2,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "2. OG",
+            "reason": "Keine Etage angegeben"
+          },
+          {
+            "name": "side",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "li.",
+            "reason": "Keine Seite (links/rechts) angegeben"
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "max.mustermann@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [],
+        "veto_gates": []
+      },
+      {
+        "contract_id": "MV-10487",
+        "tenant_name": "Max Mustermann",
+        "unit_label": "Musterstraße 12, 3. OG rechts",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-3R",
+        "active": true,
+        "score": 0.6,
+        "signals": [
+          {
+            "name": "name",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Max Mustermann",
+            "erp_value": "Max Mustermann",
+            "reason": "Name stimmt überein (100 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstr. 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstr. 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "missing",
+            "weight": 0.2,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "3. OG",
+            "reason": "Keine Etage angegeben"
+          },
+          {
+            "name": "side",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "rechts",
+            "reason": "Keine Seite (links/rechts) angegeben"
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "max.mustermann@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [],
+        "veto_gates": []
+      },
+      {
+        "contract_id": "MV-10112",
+        "tenant_name": "Erika Musterfrau",
+        "unit_label": "Musterstraße 12, EG re.",
+        "object_id": "OBJ-MS12",
+        "unit_id": "OBJ-MS12-0R",
+        "active": true,
+        "score": 0.3,
+        "signals": [
+          {
+            "name": "name",
+            "result": "mismatch",
+            "weight": 0.3,
+            "points": 0.0,
+            "email_value": "Max Mustermann",
+            "erp_value": "Erika Musterfrau",
+            "reason": "Anderer Name (60 %)"
+          },
+          {
+            "name": "address",
+            "result": "match",
+            "weight": 0.3,
+            "points": 0.3,
+            "email_value": "Musterstr. 12",
+            "erp_value": "Musterstraße 12",
+            "reason": "Adresse stimmt überein ('Musterstr. 12' = 'Musterstraße 12')"
+          },
+          {
+            "name": "floor",
+            "result": "missing",
+            "weight": 0.2,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "EG",
+            "reason": "Keine Etage angegeben"
+          },
+          {
+            "name": "side",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "re.",
+            "reason": "Keine Seite (links/rechts) angegeben"
+          },
+          {
+            "name": "contact",
+            "result": "missing",
+            "weight": 0.1,
+            "points": 0.0,
+            "email_value": null,
+            "erp_value": "erika.musterfrau@example.org",
+            "reason": "Keine Absenderadresse vorhanden"
+          }
+        ],
+        "vetoes": [],
+        "veto_gates": []
+      }
+    ],
+    "winner": "MV-10245",
+    "selected_contract": null,
+    "score": 0.6,
+    "margin": 0.0,
+    "failed_gates": [
+      "floor_missing",
+      "threshold",
+      "margin"
+    ],
+    "flags": [
+      {
+        "gate": "floor_missing",
+        "message": "Keine Etage angegeben"
+      },
+      {
+        "gate": "threshold",
+        "message": "Beste Übereinstimmung 0.60 liegt unter der Schwelle 0.85"
+      },
+      {
+        "gate": "margin",
+        "message": "Abstand zum Zweitbesten nur 0.00 (mindestens 0.15) – MV-10245 und MV-10487 kommen in Frage"
+      }
+    ],
+    "object_id": "OBJ-MS12",
+    "unknown_sender": false,
+    "building_uncertain": false,
+    "approved_contract": null,
+    "reason": "Prüfung nötig: Keine Etage angegeben | Beste Übereinstimmung 0.60 liegt unter der Schwelle 0.85 | Abstand zum Zweitbesten nur 0.00 (mindestens 0.15) – MV-10245 und MV-10487 kommen in Frage"
+  },
+  "prior_cases": [
+    {
+      "case_id": "VG-2026-0412",
+      "contract_id": "MV-10245",
+      "title": "Rohrverstopfung Küche",
+      "category": "Rohrverstopfung",
+      "room": "Küche",
+      "state": "closed",
+      "closed_at": "2026-08-05",
+      "contractor": "Sanitär Beispiel GmbH",
+      "related": true,
+      "possible_duplicate": false,
+      "reason": "gleiche Einheit, gleicher Raum (Küche), verwandte Schadenart"
+    },
+    {
+      "case_id": "VG-2026-0377",
+      "contract_id": "MV-10487",
+      "title": "Fenster undicht Wohnzimmer",
+      "category": "Fenster",
+      "room": "Wohnzimmer",
+      "state": "closed",
+      "closed_at": "2026-06-20",
+      "contractor": "Fensterbau Beispiel",
+      "related": false,
+      "possible_duplicate": false,
+      "reason": "gleiche Einheit, kein erkennbarer fachlicher Zusammenhang"
+    }
+  ],
+  "urgency": {
+    "level": "DRINGEND",
+    "rule_level": "DRINGEND",
+    "llm_level": null,
+    "triggers": [
+      "Wasser tritt aus (Schaden schreitet fort)",
+      "Folgeschaden sichtbar"
+    ],
+    "tenant_says_urgent": true,
+    "response_target": "Handwerker innerhalb von 24 Stunden",
+    "due_hours": 24,
+    "safety_instructions": [],
+    "reason": "Regel-Untergrenze: DRINGEND; Wasser tritt aus (Schaden schreitet fort), Folgeschaden sichtbar."
+  },
+  "status": "NEEDS_REVIEW",
+  "reply_draft": {
+    "language": "de",
+    "variant": "confirm_unit",
+    "to": null,
+    "subject": "Re: Wasserschaden Küche, Musterstraße 12",
+    "body": "Guten Tag,\n\nvielen Dank für Ihre Nachricht. Wir haben Ihre Schadenmeldung erhalten.\n\nBitte bestätigen Sie die genaue Lage Ihrer Wohnung: vollständige Anschrift, Etage und Wohnungsseite (links, rechts oder Mitte). Es gilt die deutsche Zählweise: Erdgeschoss = EG, darüber 1. OG.\n\nFreundliche Grüße\nIhre Hausverwaltung",
+    "auto_send": false
+  },
+  "internal_task": {
+    "title": "Zuordnung klären – Musterstraße 12: Keine Etage angegeben; Beste Übereinstimmung 0.60 liegt unter der Schwelle 0.85; Abstand zum Zweitbesten nur 0.00 (mindestens 0.15) – MV-10245 und MV-10487 kommen in Frage",
+    "scope": "clarification",
+    "assignee_role": "Sachbearbeitung",
+    "priority": "DRINGEND",
+    "due_hours": 24,
+    "contract_id": null,
+    "object_id": "OBJ-MS12",
+    "checklist": [
+      "Kandidaten und Zuordnungsgründe vergleichen",
+      "Vorbereitete Rückfrage an den Mieter nach Freigabe übermitteln",
+      "Vertragsinhaber und Einheit klären; Entscheidung begründen und protokollieren"
+    ],
+    "related_cases": [
+      "VG-2026-0412"
+    ],
+    "requires_approval": true
+  },
+  "staff_options": [],
+  "warnings": [],
+  "audit": [
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "eingegangen",
+      "details": {
+        "subject": "Wasserschaden Küche, Musterstraße 12",
+        "sender": null
+      }
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:understand",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:match",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:prior_cases",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:urgency",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:draft",
+      "details": {}
+    },
+    {
+      "ts": "2026-11-18T09:00:00+01:00",
+      "actor": "system",
+      "event": "schritt:task",
+      "details": {}
+    }
+  ]
+}

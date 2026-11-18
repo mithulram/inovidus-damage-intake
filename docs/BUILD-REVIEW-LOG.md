@@ -9,3 +9,14 @@ Builder/inspector pairs per module. Codex = Codex CLI 0.164.0 (gpt-6.1-sol, effo
   - F1 (medium, spec gap by Claude): ambiguous matches showed prior cases of only one arbitrary candidate → fixed in WO2.
   - F2 (low): building-level task title showed the internal object id instead of the address → fixed in WO2.
   - Own fix (Claude, rules): offline urgency missed "läuft … Wasser unter der Spüle aus" (S4b) → keyword added, S4b now expects DRINGEND.
+
+## WO2 – Groq/recorded providers, API, store (built by Codex)
+- Codex, 386 s, 327 tests. **Inspection by Claude – 9/10**: clean; API needed three additions for the UI (rule_overrides, sender, .env loading) and a store refresh rule – Claude added them with a test.
+
+## Inspection 1 of Claude's code (by Codex, fresh session, 315 s) – **Score 6/10, 13 findings**
+R01 forged approval via POST /api/cases (high) · R02 unescaped HTML (high) · R03 emergency phrase → not a damage report (high, reader) · R04 alternative locations ignored (high, reader) · R05 phone match hid unknown sender · R06 crash with one candidate + strict margin · R07 vetoed contract blocked a valid winner · R08 no locking · R09 stale UI responses · R10 copied reply ≠ approved reply · R11 manual assignment did not regenerate task · R12 same case id for S1/S3 · R13 n8n dropped received_at/attachments.
+- Claude fixed R01, R02, R05–R13 (commit "fix: Codex inspection findings…", 12 regression tests). Codex fixed R03, R04 in WO3 (one fix round after Claude found false positives on "oder").
+
+## Inspection 2 – full build (by Codex, fresh session, 327 s) – **Score 6/10, 11 findings**
+Fixes partly incomplete: R2-01 forged approval with actor "system" still accepted · R2-02 two buildings still allowed a building action · R2-03 emergency protection only in the offline reader · R2-04 "Musterstr 14" (no dot) not parsed · R2-05 uncertainty in the next sentence ignored · R2-06 stale/old approval could still order · R2-07 stored case lost scenario context · R2-08 no clarification text for unit_ambiguous · R2-09 "Kaltmiete" matched "kalt" · R2-10 unbounded floor could hang the grid · R2-11 handoff docs missing.
+- Claude fixed R2-01/02/03/06/07/10 (+ 5 regression tests) and the Impeccable detector findings. Codex fixed R2-04/05/08/09 in WO4 (inspected by Claude with probes). R2-11: deliverables added.
