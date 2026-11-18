@@ -116,7 +116,7 @@ urgency:
       only_in_heating_season: true
     - level: DRINGEND
       label: Wasser tritt aus (Schaden schreitet fort)
-      any: ["läuft wasser", "wasser läuft", "läuft aus", "tritt aus", "läuft unter", undicht, leck, "water leaking", "water is leaking", leaking, leak]
+      any: ["läuft wasser", "wasser läuft", "läuft aus", "tritt aus", "läuft unter", "wasser unter", undicht, leck, "water leaking", "water is leaking", leaking, leak]
     - level: DRINGEND
       label: Folgeschaden sichtbar
       any: [aufgequollen, durchfeuchtet, "feuchte wand", schimmel, swollen, mould, mold]

@@ -10,4 +10,5 @@ expected:
   status: NEEDS_REVIEW
   contract: null
   winner: MV-10245
+  urgency: DRINGEND
   failed_gates: [identity]
