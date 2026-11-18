@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -46,6 +47,7 @@ class StepRequest(RequestModel):
 
 class ApproveRequest(Approval):
     option: str | None = None
+    scenario_id: str | None = None  # demo only: same ERP overrides as when the case was processed
 
 
 def _context(provider: str | None = None, scenario_id: str | None = None) -> Context:
@@ -79,7 +81,18 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             raise HTTPException(404, "Vorgang nicht gefunden")
         return case
 
+    lock = threading.RLock()  # serialises every read-modify-write of a stored case
+
     def store_case(case: CaseRecord) -> CaseRecord:
+        with lock:
+            return _store_case(case)
+
+    def _store_case(case: CaseRecord) -> CaseRecord:
+        # Approval history is server-owned: human events in a submitted case are never trusted.
+        case = case.model_copy(deep=True)
+        case.audit = [e for e in case.audit if e.actor == "system"]
+        if case.match is not None:
+            case.match.approved_contract = None
         try:
             existing = app.state.store.get(case.case_id)
         except ValueError:
@@ -121,7 +134,7 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
 
     @app.post("/api/process", response_model=CaseRecord)
     def process(body: ProcessRequest):
-        case = pipeline.process(body.email, _context(body.provider, body.scenario_id))
+        case = pipeline.process(body.email, _context(body.provider, body.scenario_id), body.scenario_id)
         return store_case(case) if body.store else case
 
     @app.post("/api/steps/{name}", response_model=CaseRecord)
@@ -133,7 +146,7 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
         if case is None:
             if name != "understand" or body.email is None:
                 raise HTTPException(422, "Vorgang fehlt; 'understand' braucht mindestens eine E-Mail")
-            case = pipeline.new_case(body.email, ctx)
+            case = pipeline.new_case(body.email, ctx, body.scenario_id)
         try:
             return pipeline.run_step(name, case, ctx)
         except ValueError as exc:
@@ -165,14 +178,24 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
 
     @app.post("/api/approve", response_model=CaseRecord)
     def approve(body: ApproveRequest):
-        approval = Approval.model_validate(body.model_dump(exclude={"option"}))
+        approval = Approval.model_validate(body.model_dump(exclude={"option", "scenario_id"}))
         if body.action == "choose_staff_option" and body.option is not None:
             approval.reason = body.option
-        try:
-            case = actions.execute(get_case(body.case_id), approval, app.state.audit)
-        except PermissionError as exc:
-            raise HTTPException(403, str(exc)) from None
-        return app.state.store.save(case)
+        with lock:
+            case = get_case(body.case_id)
+            ctx = _context(scenario_id=body.scenario_id)
+            if body.action == "choose_staff_option" and approval.reason in {"ask_registered_email", "reply_anyway"}:
+                # the reply the staff member will approve and copy is stored on the case itself
+                variant = "ask_registered_email" if approval.reason == "ask_registered_email" else None
+                case = case.model_copy(deep=True)
+                case.reply_draft = render_reply(case, ctx, variant=variant)
+            try:
+                case = actions.execute(case, approval, app.state.audit)
+            except PermissionError as exc:
+                raise HTTPException(403, str(exc)) from None
+            if body.action == "approve_assignment" and approval.contract_id:
+                case = pipeline.apply_human_assignment(case, approval.contract_id, ctx)
+            return app.state.store.save(case)
 
     @app.get("/api/audit")
     def audit_lines():

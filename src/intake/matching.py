@@ -172,6 +172,13 @@ def _score_contract(
     )
 
 
+def ext_contact_email(candidate: Candidate, erp: ERPConnector) -> str | None:
+    contract = erp.contract(candidate.contract_id)
+    if contract is None or not contract.contact.email:
+        return None
+    return contract.contact.email.strip().lower()
+
+
 def _is_candidate(contract: Contract, ext: Extraction, loc: NormalizedLocation, rules: Rules) -> bool:
     named = ext.tenant_name or ext.sender_name
     if named and _name_similarity(named, contract.tenant_name) >= rules.match.candidate_name_min:
@@ -209,6 +216,9 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
         fail(Gate.FLOOR_MISSING, loc.floor_note or "Etage fehlt oder ist unklar – beim Mieter nachfragen")
     if loc.floor_status == "english_ordinal" and rules.normalize.english_floor_counting == "ask":
         fail(Gate.FLOOR_AMBIGUOUS, f"Zählweise der Etage unklar: {loc.floor_note}")
+    if ext.location_alternatives:
+        fail(Gate.UNIT_AMBIGUOUS, "E-Mail nennt mehrere oder unsichere Ortsangaben: "
+                                  + "; ".join(ext.location_alternatives) + " – beim Mieter nachfragen")
 
     # Stage A ---------------------------------------------------------------
     valid = [c for c in candidates if not c.vetoes]
@@ -221,18 +231,16 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
         for gate in top.veto_gates:
             fail(gate, f"{top.contract_id}: " + "; ".join(top.vetoes))
     else:
-        top_raw = candidates[0]
-        if top_raw.vetoes:  # the best-looking contract was ruled out by a contradiction
-            for gate in top_raw.veto_gates:
-                fail(gate, f"{top_raw.contract_id} ausgeschlossen: " + "; ".join(top_raw.vetoes))
+        # Vetoed candidates stay visible with their reasons but do not block a valid winner.
         winner = valid[0]
         second = valid[1].score if len(valid) > 1 else 0.0
         margin = round(winner.score - second, 4)
         if winner.score < rules.match.threshold:
             fail(Gate.THRESHOLD, f"Beste Übereinstimmung {winner.score:.2f} liegt unter der Schwelle {rules.match.threshold:.2f}")
         if margin < rules.match.min_margin:
-            fail(Gate.MARGIN, f"Abstand zum Zweitbesten nur {margin:.2f} (mindestens {rules.match.min_margin:.2f}) – "
-                              f"{winner.contract_id} und {valid[1].contract_id} kommen in Frage")
+            rival = (f"{winner.contract_id} und {valid[1].contract_id} kommen in Frage" if len(valid) > 1
+                     else f"nur {winner.contract_id} übrig, aber Abstand zu 0 reicht nicht")
+            fail(Gate.MARGIN, f"Abstand zum Zweitbesten nur {margin:.2f} (mindestens {rules.match.min_margin:.2f}) – {rival}")
 
     # Identity flags (on the Stage-A winner) ---------------------------------
     unknown_sender = False
@@ -243,8 +251,10 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
         if ext.sender_name and _name_similarity(ext.sender_name, winner.tenant_name) < rules.match.name_full_min \
                 and name_sig.result != "partial":
             fail(Gate.IDENTITY, f"Absender '{ext.sender_name}' ist nicht Vertragsinhaber ({winner.tenant_name})")
-        contact_sig = next(s for s in winner.signals if s.name == "contact")
-        unknown_sender = bool(email.sender_email) and contact_sig.result != "match"
+        # Unknown sender is about the e-mail address only – a matching phone number earns points
+        # but does not make an unregistered address "registered".
+        sender = (email.sender_email or "").strip().lower()
+        unknown_sender = bool(sender) and sender != ext_contact_email(winner, erp)
         if unknown_sender and rules.match.unknown_sender_forces_review:
             fail(Gate.IDENTITY, "Nachricht nicht von der registrierten E-Mail-Adresse")
 

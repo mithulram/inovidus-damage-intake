@@ -59,7 +59,7 @@ def run_scenario(sc: Scenario, provider: LLMProvider | str | None = None) -> tup
     clock = sc.email.received_at or FIXED_NOW
     ctx = Context.build(provider=get_provider(provider) if isinstance(provider, str) else provider,
                         rule_overrides=sc.rule_overrides, data_overrides=sc.data_overrides, now=lambda: clock)
-    case = process(sc.email, ctx)
+    case = process(sc.email, ctx, sc.id)
     actuals = {
         "type": case.understanding.classification.type.value,
         "category": case.understanding.classification.category,

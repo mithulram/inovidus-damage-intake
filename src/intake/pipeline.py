@@ -15,10 +15,12 @@ from .steps import STEPS
 LAST_STEP = list(STEPS)[-1]
 
 
-def new_case(email: InboundEmail, ctx: Context) -> CaseRecord:
+def new_case(email: InboundEmail, ctx: Context, scenario_id: str | None = None) -> CaseRecord:
     now = ctx.now()
     received = email.received_at or now
     seed = email.message_id or f"{email.subject}\n{email.body}\n{email.sender_email}"
+    if scenario_id:  # demo scenarios share e-mails but differ in ERP/rule overrides
+        seed = f"{scenario_id}\n{seed}"
     short = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:6].upper()
     case = CaseRecord(case_id=f"SM-{received:%Y%m%d}-{short}", received_at=received, input=email)
     case.processing.rules_version = ctx.rules.version
@@ -37,8 +39,26 @@ def run_step(name: str, case: CaseRecord, ctx: Context) -> CaseRecord:
     return case
 
 
-def process(email: InboundEmail, ctx: Context) -> CaseRecord:
-    case = new_case(email, ctx)
+def process(email: InboundEmail, ctx: Context, scenario_id: str | None = None) -> CaseRecord:
+    case = new_case(email, ctx, scenario_id)
     for name in STEPS:
         case = run_step(name, case, ctx)
     return case
+
+
+def apply_human_assignment(case: CaseRecord, contract_id: str, ctx: Context) -> CaseRecord:
+    """After a human approved a contract: keep the system proposal untouched, record the
+    approved contract and regenerate the contract-dependent outputs (history, task)."""
+    from .models import Status
+
+    view = case.model_copy(deep=True)
+    view.match.selected_contract = contract_id
+    view.match.winner = contract_id
+    view.status = Status.READY_FOR_APPROVAL
+    view = STEPS["prior_cases"](view, ctx)
+    view = STEPS["task"](view, ctx)
+    out = case.model_copy(deep=True)
+    out.match.approved_contract = contract_id
+    out.prior_cases = view.prior_cases
+    out.internal_task = view.internal_task
+    return out

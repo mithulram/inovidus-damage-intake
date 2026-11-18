@@ -129,5 +129,5 @@ def test_absent_details_are_not_invented_and_provider_is_offline(rules, monkeypa
     assert result.extraction.model_dump() == {
         "tenant_name": None, "sender_name": None, "street_raw": None, "house_no": None,
         "floor_raw": None, "side_raw": None, "room": None, "damage_description": None,
-        "since": None, "photos_mentioned": False, "phone": None, "language": "de",
+        "since": None, "photos_mentioned": False, "phone": None, "language": "de", "location_alternatives": [],
     }

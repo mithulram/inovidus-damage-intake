@@ -204,6 +204,7 @@ function verdict(c) {
   let line = m?.reason || "";
   if (c.status === "READY_FOR_APPROVAL") line = `Alle Prüfungen bestanden: ${m.selected_contract}, ${num(m.score)} Punkte, Abstand ${num(m.margin)}. Nichts passiert ohne Ihre Freigabe.`;
   if (c.status === "NEEDS_REVIEW") line = (m.flags || []).map((f) => f.message).join(" · ");
+  if (m?.approved_contract) line = `Von einem Menschen freigegeben: ${m.approved_contract}. ` + line;
   const u = c.urgency;
   return `<div class="verdict s-${c.status}${u?.level === "NOTFALL" ? " emergency" : ""}">
     <svg class="verdict-icon" aria-hidden="true"><use href="#i-${s.icon}"/></svg>
@@ -306,7 +307,7 @@ function gatesPanel(c, sc) {
 }
 
 function priorPanel(c) {
-  if (!c.prior_cases?.length) return `<p class="reader-note">Keine früheren Vorgänge für ${c.match?.selected_contract || c.match?.winner || "die Kandidaten"}.</p>`;
+  if (!c.prior_cases?.length) return `<p class="reader-note">Keine früheren Vorgänge für ${esc(c.match?.approved_contract || c.match?.selected_contract || c.match?.winner || "die Kandidaten")}.</p>`;
   return `<ul class="prior">${c.prior_cases.map((p) => `<li class="${p.related ? "related" : ""}">
       <span class="p-id">${esc(p.case_id)}</span><span class="p-title">${esc(p.title)} · ${p.state === "closed" ? "abgeschlossen" : "offen"}${p.possible_duplicate ? " · mögliche Doppelmeldung" : ""}</span>
       <span class="p-why">${esc(p.contract_id)} · ${esc(p.reason)}${p.contractor ? ` · damals: ${esc(p.contractor)}` : ""}</span></li>`).join("")}</ul>
@@ -344,13 +345,13 @@ function stampHtml(a, fresh) {
 function carbon(c, opts = {}) {
   const ap = approvals(c);
   const stamp = stampHtml(ap.assignment, opts.freshStamp);
-  const r = opts.replyOverride || c.reply_draft, t = c.internal_task;
+  const r = c.reply_draft, t = c.internal_task;
   const sheets = {
     reply: `<div class="sheet-meta"><span class="label">An</span><span>${esc(r?.to || "Absender (Adresse nicht übermittelt)")}</span>
         <span class="label">Betreff</span><span>${esc(r?.subject)}</span>
         <span class="label">Sprache</span><span>${r?.language === "en" ? "Englisch (wie die E-Mail)" : "Deutsch"}</span></div>
       <div class="letter">${esc(r?.body)}</div>
-      <p style="margin-top:.8rem"><span class="never-sent">${icon("mail")}Entwurf – wird nie automatisch gesendet${opts.replyOverride ? " · Variante: registrierte Adresse erbitten" : ""}</span></p>`,
+      <p style="margin-top:.8rem"><span class="never-sent">${icon("mail")}Entwurf – wird nie automatisch gesendet${r?.variant === "ask_registered_email" ? " · Variante: registrierte Adresse erbitten" : ""}</span></p>`,
     task: t ? `<div class="task-title">${esc(t.title)}</div>
       <div class="task-head"><span class="chip u-${t.priority}">${t.priority}</span><span>an: ${esc(t.assignee_role)}</span><span>Frist: ${t.due_hours} Std.</span>
         <span>Ebene: ${{ contract: "Vertrag", object: "Gebäude", routing: "Weiterleitung", clarification: "Klärung" }[t.scope]}</span>
@@ -469,16 +470,24 @@ function bindCase() {
     const off = () => $$(`[data-unit="${el.dataset.unit}"]`).forEach((x) => x.classList.remove("hl"));
     el.addEventListener("mouseenter", on); el.addEventListener("mouseleave", off);
   });
-  $$(".carbon-tab").forEach((b) => b.addEventListener("click", () => { state.sheet = b.dataset.sheet; renderCase({ replyOverride: state.current.replyOverride }); $(".carbon-tab[aria-selected=true]")?.focus(); }));
+  $$(".carbon-tab").forEach((b) => b.addEventListener("click", () => { state.sheet = b.dataset.sheet; renderCase(); $(".carbon-tab[aria-selected=true]")?.focus(); }));
   $("#actor")?.addEventListener("change", (e) => { state.actor = e.target.value.trim() || "Sachbearbeitung"; localSet("actor", state.actor); });
   $$("[data-act]").forEach((b) => b.addEventListener("click", () => act(b)));
 }
 
 /* ------------------------------------------------------------------ actions */
 
-async function ensureStored(c) {
+// Act only on what the server has stored. If that differs from what is on screen
+// (e.g. someone else already acted), show the stored version instead of acting blindly.
+async function adopt(cur, c) {
   const stored = await api("/api/cases", c);
-  return stored?.case_id ? stored : c;
+  const human = (x) => (x.audit || []).filter((e) => e.actor !== "system").length;
+  if (human(stored) !== human(c)) {
+    cur.case = stored; renderCase();
+    throw new Error("Der Vorgang wurde inzwischen geändert – bitte die aktuelle Fassung prüfen.");
+  }
+  cur.case = stored;
+  return stored;
 }
 
 async function act(btn) {
@@ -490,41 +499,37 @@ async function act(btn) {
   btn.classList.add("loading"); btn.disabled = true;
   try {
     if (kind === "approve_reply") {
-      const body = (cur.replyOverride || c.reply_draft).body;
-      await ensureStored(c);
-      cur.case = await api("/api/approve", { case_id: c.case_id, actor: state.actor, action: "approve_reply" });
-      try { await navigator.clipboard.writeText(body); toast("Entwurf freigegeben und kopiert – Versand bleibt bei Ihnen."); }
+      await adopt(cur, c);
+      cur.case = await api("/api/approve", { case_id: cur.case.case_id, actor: state.actor, action: "approve_reply" });
+      try { await navigator.clipboard.writeText(cur.case.reply_draft.body); toast("Entwurf freigegeben und kopiert – Versand bleibt bei Ihnen."); }
       catch { toast("Entwurf freigegeben. Kopieren nicht erlaubt – bitte Text markieren."); }
-      renderCase({ replyOverride: cur.replyOverride });
+      renderCase();
     } else if (kind === "approve_assignment") {
       const manual = btn.dataset.manual === "1";
       const contract = manual ? $("#manual-contract").value : btn.dataset.contract;
       const reason = manual ? $("#manual-reason").value.trim() : null;
       if (manual && !reason) { errEl.textContent = "Bitte eine Begründung angeben – sie steht später im Protokoll."; $("#manual-reason").focus(); return; }
-      await ensureStored(c);
-      cur.case = await api("/api/approve", { case_id: c.case_id, actor: state.actor, action: "approve_assignment", contract_id: contract, reason });
+      await adopt(cur, c);
+      cur.case = await api("/api/approve", { case_id: cur.case.case_id, actor: state.actor, action: "approve_assignment", contract_id: contract, reason, scenario_id: cur.scenario?.id });
       toast(`Zuordnung ${contract} freigegeben.`);
-      renderCase({ freshStamp: true, replyOverride: cur.replyOverride });
+      renderCase({ freshStamp: true });
     } else if (kind === "order_contractor") {
       const a = approvals(c).assignment;
-      cur.case = await api("/api/approve", { case_id: c.case_id, actor: state.actor, action: "order_contractor", contract_id: a.details.contract_id, reason: a.details.reason });
+      cur.case = await api("/api/approve", { case_id: c.case_id, actor: state.actor, action: "order_contractor", contract_id: a.details.contract_id, reason: a.details.reason, scenario_id: cur.scenario?.id });
       toast("Handwerkerauftrag erfasst (simuliert).");
-      renderCase({ replyOverride: cur.replyOverride });
+      renderCase();
     } else if (kind === "object_action") {
-      await ensureStored(c);
-      cur.case = await api("/api/approve", { case_id: c.case_id, actor: state.actor, action: "object_action", reason: "Notfall im Gebäude" });
+      await adopt(cur, c);
+      cur.case = await api("/api/approve", { case_id: cur.case.case_id, actor: state.actor, action: "object_action", reason: "Notfall im Gebäude", scenario_id: cur.scenario?.id });
       toast("Notdienst für das Gebäude erfasst (simuliert).");
-      renderCase({ replyOverride: cur.replyOverride });
+      renderCase();
     } else if (kind === "staff") {
       const option = btn.dataset.option;
-      await ensureStored(c);
-      cur.case = await api("/api/approve", { case_id: c.case_id, actor: state.actor, action: "choose_staff_option", option, reason: option });
-      if (option === "ask_registered_email") {
-        cur.replyOverride = await api(`/api/cases/${encodeURIComponent(c.case_id)}/reply?variant=ask_registered_email`);
-        state.sheet = "reply";
-      }
+      await adopt(cur, c);
+      cur.case = await api("/api/approve", { case_id: cur.case.case_id, actor: state.actor, action: "choose_staff_option", option, reason: option, scenario_id: cur.scenario?.id });
+      if (option !== "call_tenant") state.sheet = "reply";
       toast(option === "call_tenant" ? "Anruf vorgemerkt." : "Option gewählt.");
-      renderCase({ replyOverride: cur.replyOverride });
+      renderCase();
     }
     loadStore();
   } catch (e) {
@@ -536,7 +541,10 @@ async function act(btn) {
 
 /* ------------------------------------------------------------------ opening */
 
+let selection = 0; // increases with every selection; stale responses are dropped
+
 async function openScenario(id) {
+  const token = ++selection;
   const sc = state.scenarios.find((s) => s.id === id);
   const cached = state.results.get(id);
   state.current = { kind: "scenario", id, scenario: sc, case: cached, loading: !cached };
@@ -545,20 +553,23 @@ async function openScenario(id) {
   try {
     const c = state.results.get(id) || await api("/api/process", { email: sc.email, scenario_id: sc.id, provider: state.provider });
     state.results.set(id, c);
+    if (token !== selection) return;
     Object.assign(state.current, { case: c, loading: false });
-  } catch (e) { Object.assign(state.current, { loading: false, error: e.message }); }
+  } catch (e) { if (token !== selection) return; Object.assign(state.current, { loading: false, error: e.message }); }
   renderInbox(); renderCase(); $("#desk").focus({ preventScroll: true }); window.scrollTo({ top: 0 });
 }
 
 async function openStored(id) {
+  const token = ++selection;
   state.current = { kind: "store", id, loading: true };
   renderInbox(); renderCase();
-  try { Object.assign(state.current, { case: await api(`/api/cases/${encodeURIComponent(id)}`), loading: false }); }
-  catch (e) { Object.assign(state.current, { loading: false, error: e.message }); }
+  try { const c = await api(`/api/cases/${encodeURIComponent(id)}`); if (token !== selection) return; Object.assign(state.current, { case: c, loading: false }); }
+  catch (e) { if (token !== selection) return; Object.assign(state.current, { loading: false, error: e.message }); }
   renderInbox(); renderCase(); window.scrollTo({ top: 0 });
 }
 
 function compose() {
+  ++selection;
   switchView("case");
   state.current = null;
   $("#view-case").innerHTML = `<div class="case"><h1 class="case-title">Eigene E-Mail prüfen</h1>
@@ -573,10 +584,11 @@ function compose() {
     e.preventDefault();
     const f = new FormData(e.target);
     const email = { subject: f.get("subject"), body: f.get("body"), sender_email: f.get("sender_email") || null };
+    const token = ++selection;
     state.current = { kind: "custom", id: "custom", loading: true };
     renderCase();
-    try { Object.assign(state.current, { case: await api("/api/process", { email, provider: state.provider }), loading: false }); }
-    catch (err) { Object.assign(state.current, { loading: false, error: err.message }); }
+    try { const c = await api("/api/process", { email, provider: state.provider }); if (token !== selection) return; Object.assign(state.current, { case: c, loading: false }); }
+    catch (err) { if (token !== selection) return; Object.assign(state.current, { loading: false, error: err.message }); }
     renderCase();
   });
 }

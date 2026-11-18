@@ -63,6 +63,7 @@ class Gate(str, Enum):
     FLOOR_AMBIGUOUS = "floor_ambiguous"
     OUT_OF_SCOPE = "out_of_scope"
     NO_CANDIDATE = "no_candidate"
+    UNIT_AMBIGUOUS = "unit_ambiguous"
 
 
 FloorStatus = Literal["ok", "missing", "unclear", "english_ordinal"]
@@ -114,6 +115,9 @@ class Extraction(Strict):
     photos_mentioned: bool = False
     phone: str | None = None
     language: Literal["de", "en"] = "de"
+    location_alternatives: list[str] = Field(
+        default_factory=list,
+        description="Weitere oder unsichere Ortsangaben (z. B. '3. OG rechts', 'bin unsicher'); nicht leer = Prüfung")
 
 
 class Understanding(Strict):
@@ -180,6 +184,7 @@ class MatchResult(Strict):
     flags: list[Flag] = Field(default_factory=list)
     object_id: str | None = Field(None, description="Gebäude, wenn die Adresse sicher ist")
     unknown_sender: bool = False
+    approved_contract: str | None = Field(None, description="Von einem Menschen freigegebener Vertrag (überschreibt nie den Vorschlag)")
     reason: str
 
 
