@@ -84,7 +84,8 @@ def test_all_matched_triggers_and_safety_instructions_are_ordered_and_deduplicat
     }})
     result = run(case, ctx).urgency
     assert result.triggers == ["Gasgeruch", "Rohrbruch / Wasser läuft durch Decke oder steht", "Wasser an Elektrik / Stromausfall"]
-    assert result.safety_instructions == ["Gebäude verlassen.", "112 anrufen.", "Wasser abstellen.", "Sicherung ausschalten."]
+    # gas is active: advice to operate fuses/switches from other hazards is dropped (R3-04)
+    assert result.safety_instructions == ["Gebäude verlassen.", "112 anrufen.", "Wasser abstellen."]
 
 
 def test_subject_is_considered_and_missing_understanding_is_refused():

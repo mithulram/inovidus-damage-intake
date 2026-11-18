@@ -91,6 +91,9 @@ class UrgencyRules(_M):
     rules: list[UrgencyRule]
     tenant_urgency_words: list[str]
     safety_instructions: dict[str, list[str]]
+    # when a hazard's instructions are active, drop other instructions containing these words
+    # (e.g. gas: never advise operating fuses or switches)
+    safety_conflicts: dict[str, list[str]] = {}
 
 
 class PriorCaseRules(_M):

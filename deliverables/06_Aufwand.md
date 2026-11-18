@@ -1,33 +1,37 @@
 # Tatsächlicher Aufwand
 
-Ehrliche Angabe auf Basis der Zeitstempel (`docs/TIMELOG.md`, Git-Historie). Die Arbeit lief **KI-gestützt**: Claude Code und Codex haben teilweise **parallel** gearbeitet; ich habe geplant, entschieden, geprüft und freigegeben.
+Ehrliche Angabe auf Basis der Zeitstempel in `docs/TIMELOG.md` und der Git-Historie. Die Arbeit lief **KI-gestützt**: Claude Code und Codex haben zum Teil **gleichzeitig** gearbeitet. Ich habe geplant, entschieden, geprüft und freigegeben.
 
-## Kern im Sinne der 90-Minuten-Aufgabe
+Wichtig: Es gibt drei verschiedene Zeitmaße – sie werden hier getrennt angegeben.
 
-| Teil | Zeit (Uhr, 18.11.2026) | Dauer |
+## 1. Kern (im Sinne der 90-Minuten-Aufgabe)
+
+Nur die Zeilen, die im Timelog als **Core** markiert sind:
+
+| Tätigkeit | Uhrzeit (18.11.2026) | Dauer |
 |---|---|---|
-| Aufgabe verstehen, Firma recherchieren | 19:08–19:12 | ca. 5 min |
-| Plan erstellen und prüfen lassen | 19:12–19:21 | ca. 10 min |
-| Entscheidungen zu meinen offenen Fragen | 19:21–20:07 | ca. 45 min (inkl. Abstimmung) |
-| Kern bauen: Datenmodell, Regeln, Zuordnung, Dringlichkeit, frühere Vorgänge, JSON, Antwort, Aufgabe, Testfälle | 20:07–20:30 | ca. 25 min |
-| **Kern gesamt** | | **ca. 85 min** |
+| Aufgabe lesen, Firma recherchieren, Verständnis aufschreiben | 19:08–19:12 | 4 min |
+| Plan schreiben (Priorisierung, Technik, Unsicherheit) | 19:12–19:21 | 9 min |
+| Kern bauen: Datenmodell, Regeln, Zuordnung, 14 Testfälle | 20:07–20:15 | 8 min |
+| Kern bauen: Erkennen ohne KI, frühere Vorgänge, Dringlichkeit, Antwort, Aufgabe, Freigabe | 20:15–20:30 | 15 min |
+| **Kern (KI-gestützte Arbeitszeit)** | | **ca. 36 min** |
 
-Damit lag der **Kern innerhalb der 90 Minuten**.
+Der Kern lag damit **deutlich unter 90 Minuten**. Meine eigene Zeit zum Lesen und Prüfen ist darin nicht enthalten.
 
-## Zusatz (bewusst darüber hinaus)
+## 2. Gesamter Zeitraum (Uhrzeit von Anfang bis Ende)
 
-| Teil | Dauer (ca.) |
-|---|---|
-| Groq-Anbindung (Doku geprüft, Schlüssel, echte Antworten aufgezeichnet) | 15 min |
-| API für n8n und Oberfläche | 10 min |
-| Oberfläche für Sachbearbeiter (Design, Bau, Bildschirmfotos) | 45 min |
-| n8n-Workflow (installiert, gebaut, ausgeführt, Bildschirmfotos) | 15 min |
-| Zwei unabhängige Code-Prüfungen und Korrekturen | 35 min |
-| Unterlagen, Beispiele, README | 25 min |
-| **Zusatz gesamt** | **ca. 2 h 25 min** |
+19:08 bis ca. 22:00 = **ca. 2 Stunden 50 Minuten**. Darin enthalten (alles als **Extra** im Timelog markiert):
+- meine Entscheidungen zu offenen Fragen und die Installation der Design-Werkzeuge (19:21–20:07),
+- Groq-Anbindung, API, Oberfläche, n8n-Workflow, Bildschirmfotos,
+- drei unabhängige Code-Prüfungen durch Codex und die Korrekturen,
+- Unterlagen und Beispiele.
 
-**Gesamt (Zeitraum 19:08 bis ca. 21:40):** rund **2 h 30 min Arbeitszeit** mit KI-Unterstützung, plus meine eigene Zeit zum Lesen, Prüfen und für das Vorbereiten des Gesprächs: *[Mithul: eigene Zeit ergänzen]*.
+Weil Claude und Codex teilweise gleichzeitig gearbeitet haben, ist die Summe der einzelnen Timelog-Zeilen größer als dieser Zeitraum.
 
-## Warum mehr als 90 Minuten?
+## 3. Meine eigene Zeit
 
-Die Aufgabe sagt, dass keine perfekte Lösung erwartet wird. Ich habe den Kern so priorisiert, dass er in die 90 Minuten passt. Die zusätzliche Zeit habe ich bewusst investiert, weil im Gespräch Regeln live geändert werden sollen – dafür brauchte ich Tests, eine verständliche Oberfläche und einen sichtbaren Ablauf. Alle Zusätze sind in den Unterlagen als „Zusatz“ erkennbar.
+*[Mithul: eigene Zeit ergänzen – Aufgabe lesen, Fragen beantworten, Ergebnisse prüfen, Gespräch vorbereiten.]*
+
+## Warum mehr als 90 Minuten insgesamt?
+
+Die Aufgabe erwartet keine perfekte Lösung. Ich habe den Kern so priorisiert, dass er in die 90 Minuten passt. Die zusätzliche Zeit habe ich bewusst investiert, weil im Gespräch Regeln live geändert werden sollen – dafür brauchte ich Tests, eine verständliche Oberfläche und einen sichtbaren Ablauf in n8n. Alle Zusätze sind in den Unterlagen als „Extra“ bzw. „Zusatz“ erkennbar.

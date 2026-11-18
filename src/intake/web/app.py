@@ -108,6 +108,8 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             volatile = {"audit", "processed_at", "received_at"}
             if existing.model_dump(exclude=volatile) == case.model_dump(exclude=volatile):
                 return existing  # same result: idempotent
+            if existing.processed_at and (case.processed_at is None or case.processed_at <= existing.processed_at):
+                return existing  # an older/stale result never overwrites a newer one
         case = case.model_copy(deep=True)
         label = "in Prüfliste übernommen" if existing is None else "neu verarbeitet (Regeln oder Leser geändert)"
         event = AuditEvent(ts=datetime.now(timezone.utc), actor="system", event=label,

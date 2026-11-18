@@ -124,6 +124,8 @@ urgency:
       label: Kein Warmwasser / Heizung außerhalb der Heizperiode
       any: ["kein warmwasser", "no hot water", "heizung ausgefallen", "heizung geht nicht", "keine heizung", "no heating"]
   tenant_urgency_words: [dringend, sofort, schnellstmöglich, eilig, urgent, asap, immediately]
+  safety_conflicts:            # Gas: keine Hinweise, die Schalter oder Sicherungen betätigen lassen
+    gas: ["Sicherung", "Schalter"]
   safety_instructions:
     gas:
       - "Kein Licht und keine elektrischen Schalter betätigen, kein offenes Feuer."

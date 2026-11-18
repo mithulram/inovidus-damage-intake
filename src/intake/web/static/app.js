@@ -479,11 +479,20 @@ function bindCase() {
 // Act only on what the server has stored. If that differs from what is on screen
 // (e.g. someone else already acted), show the stored version instead of acting blindly.
 async function adopt(cur, c) {
-  const stored = await api("/api/cases", c);
-  const human = (x) => (x.audit || []).filter((e) => e.actor !== "system").length;
-  if (human(stored) !== human(c)) {
+  let stored = null;
+  try { stored = await api(`/api/cases/${encodeURIComponent(c.case_id)}`); }
+  catch (e) { if (e.status !== 404) throw e; }
+  if (!stored) stored = await api("/api/cases", c);  // first action: put this proposal into the review inbox
+  const humanCount = (x) => (x.audit || []).filter((e) => e.actor !== "system").length;
+  if (humanCount(stored) === 0 && c.processed_at && stored.processed_at && Date.parse(c.processed_at) > Date.parse(stored.processed_at)) {
+    stored = await api("/api/cases", c);  // this view is newer (e.g. rules changed) and nobody acted yet: refresh
+  }
+  const key = (x) => JSON.stringify([x.status, x.match?.selected_contract, x.match?.approved_contract, x.match?.failed_gates,
+    x.urgency?.level, x.processing?.rules_version, (x.audit || []).filter((e) => e.actor !== "system").length]);
+  if (key(stored) !== key(c)) {
     cur.case = stored; renderCase();
-    throw new Error("Der Vorgang wurde inzwischen geändert – bitte die aktuelle Fassung prüfen.");
+    const err = new Error("Der gespeicherte Vorgang weicht von dieser Ansicht ab (neu verarbeitet oder bereits bearbeitet). Die aktuelle Fassung wird angezeigt – bitte erneut prüfen.");
+    err.status = 409; throw err;
   }
   cur.case = stored;
   return stored;

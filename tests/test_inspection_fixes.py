@@ -208,3 +208,64 @@ def test_stored_case_keeps_scenario_context(client):
                                           "contract_id": "MV-10999", "reason": "Mieter bestätigt 2. OG rechts"})
     assert r.status_code == 200
     assert r.json()["internal_task"]["contract_id"] == "MV-10999"
+
+
+# ---- round 3 ---------------------------------------------------------------
+
+class SonstigesButNotfall(MisreadingProvider):
+    """Reader says 'not a damage report' but hints NOTFALL for a phrase the rules do not know."""
+
+    def understand(self, email, rules):
+        u = super().understand(email, rules)
+        from intake.models import Urgency
+        u.urgency_hint = Urgency.NOTFALL
+        return u
+
+
+# R3-03 – an older (stale) result never overwrites a newer stored one
+def test_stale_upload_does_not_overwrite_newer_result(client):
+    sc = scenario("S1")
+    old = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1"}).json()
+    newer = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1"}).json()
+    newer["warnings"] = [*newer["warnings"], "neuere Fassung"]
+    client.post("/api/cases", json=newer)
+    stale = dict(old, warnings=[*old["warnings"], "alte Fassung"])
+    kept = client.post("/api/cases", json=stale).json()
+    assert "neuere Fassung" in kept["warnings"] and "alte Fassung" not in kept["warnings"]
+
+
+# R3-05 – a NOTFALL hint keeps the emergency path even if the reader says SONSTIGES
+def test_notfall_hint_overrides_out_of_scope_classification():
+    from intake.context import Context
+    from intake.pipeline import process
+    ctx = Context.build(provider=SonstigesButNotfall())
+    case = process(InboundEmail(subject="Hilfe", body="Bei uns brummt der Zählerschrank und es knistert. Musterstraße 12, 2. OG links. Max Mustermann"), ctx)
+    assert case.status.value != "OUT_OF_SCOPE"
+    assert case.urgency.level.value == "NOTFALL"
+    assert case.internal_task.priority.value == "NOTFALL"
+
+
+# R3-04 – combined hazards never give contradictory safety advice
+@pytest.mark.parametrize("body", [
+    "Es riecht nach Gas und wir haben einen Stromausfall. Musterstraße 12, 2. OG links. Max Mustermann",
+    "Rohrbruch! Wasser kommt durch die Decke und es riecht nach Gas. Musterstraße 12, 2. OG links. Max Mustermann",
+])
+def test_gas_suppresses_fuse_and_switch_advice_from_other_hazards(body):
+    from intake.context import Context
+    from intake.pipeline import process
+    from intake.providers.offline import OfflineProvider
+    case = process(InboundEmail(subject="Notfall", body=body), Context.build(provider=OfflineProvider()))
+    s = case.urgency.safety_instructions
+    gas = RULES.urgency.safety_instructions["gas"]
+    assert s[: len(gas)] == gas  # gas advice first and complete
+    assert not any("Sicherung" in x for x in s)
+    assert "\n\n".join(s) in case.reply_draft.body or all(x in case.reply_draft.body for x in s)
+
+
+def test_burst_pipe_alone_keeps_fuse_advice():
+    from intake.context import Context
+    from intake.pipeline import process
+    from intake.providers.offline import OfflineProvider
+    case = process(InboundEmail(subject="Rohrbruch", body="Rohrbruch, Wasser kommt durch die Decke. Musterstraße 12, 2. OG links. Max Mustermann"),
+                   Context.build(provider=OfflineProvider()))
+    assert any("Sicherung" in x for x in case.urgency.safety_instructions)

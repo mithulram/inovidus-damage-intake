@@ -25,3 +25,4 @@ Times are local (Europe/Berlin). "Core" = work within the spirit of the 90-min t
 | 2026-11-18 | 21:10 | 21:30 | Claude | Deliverables (German), examples, README, explainer (private) | Extra |
 
 Note: rows overlap because Claude and Codex worked in parallel. Mithul's own time (reading, answering the plan questions 19:21–20:07, reviewing) is not measured here – Mithul to add.
+| 2026-11-18 | 21:30 | 21:39 | Codex → Claude | Inspection round 3 (7/10, 6 findings); WO5 (Codex) + Claude fixes | Extra |

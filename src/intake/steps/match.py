@@ -14,7 +14,9 @@ def run(case: CaseRecord, ctx: Context) -> CaseRecord:
     case = case.model_copy(deep=True)
     result = match_contracts(case.understanding.extraction, case.input, ctx.erp, ctx.rules)
 
-    if case.understanding.classification.type != MessageType.SCHADENMELDUNG and is_rule_emergency(case, ctx.rules):
+    llm_emergency = case.understanding.urgency_hint is not None and case.understanding.urgency_hint.value == "NOTFALL"
+    if case.understanding.classification.type != MessageType.SCHADENMELDUNG and (is_rule_emergency(case, ctx.rules)
+                                                                                  or llm_emergency):
         # Safety first: whatever the reader said, a rule-recognised emergency is handled as damage.
         case.understanding.classification.type = MessageType.SCHADENMELDUNG
         case.warnings.append("Notfall-Regel greift – als Schadenmeldung behandelt, obwohl der Leser es anders eingestuft hat")

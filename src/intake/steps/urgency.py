@@ -18,8 +18,17 @@ def run(case: CaseRecord, ctx: Context) -> CaseRecord:
     rule_level = Urgency.max(*(r.level for r in matched))
     llm_level = case.understanding.urgency_hint
     level = Urgency.max(rule_level, llm_level)
-    safety = list(dict.fromkeys(instruction for r in matched if r.level == Urgency.NOTFALL and r.safety
-                               for instruction in cfg.safety_instructions.get(r.safety, [])))
+    hazards = list(dict.fromkeys(r.safety for r in matched if r.level == Urgency.NOTFALL and r.safety))
+    hazards.sort(key=lambda h: h != "gas")  # gas advice always first
+    safety: list[str] = []
+    for hazard in hazards:
+        for instruction in cfg.safety_instructions.get(hazard, []):
+            # an active hazard can forbid other hazards' advice (gas: never operate fuses or switches)
+            conflict = any(word.lower() in instruction.lower()
+                           for other in hazards if other != hazard
+                           for word in cfg.safety_conflicts.get(other, []))
+            if not conflict and instruction not in safety:
+                safety.append(instruction)
     reason = "Regel-Untergrenze: " + rule_level.value + "; " + (
         ", ".join(r.label for r in matched) if matched else "keine Dringlichkeitsregel getroffen"
     )
