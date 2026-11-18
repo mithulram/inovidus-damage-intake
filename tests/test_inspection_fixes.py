@@ -401,3 +401,23 @@ def test_staff_options_follow_manual_assignment(client):
                                             "contract_id": "MV-10112", "reason": "Erika ist Mieterin im EG"}).json()
     call = next((o for o in out["staff_options"] if o["code"] == "call_tenant"), None)
     assert call is None or (call["available"] is False and not call.get("detail"))
+
+
+# R7-02 – contact state is consistent after reassignment, in both directions
+def test_contact_state_consistent_after_reassignment(client):
+    sc = scenario("S2")
+    email = {**sc["email"], "sender_email": "max.mustermann@example.org"}
+    case = client.post("/api/process", json={"email": email, "scenario_id": "S2", "store": True}).json()
+    assert case["match"]["unknown_sender"] is False
+    out = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                            "contract_id": "MV-10112", "reason": "Test: Erika"}).json()
+    assert out["match"]["unknown_sender"] is True
+    assert "Nicht von der registrierten E-Mail-Adresse" in out["warnings"]
+    opt = next(o for o in out["staff_options"] if o["available"])
+    ok = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "choose_staff_option",
+                                           "option": opt["code"]})
+    assert ok.status_code == 200
+    back = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                             "contract_id": "MV-10245", "reason": "doch Max"}).json()
+    assert back["match"]["unknown_sender"] is False and back["staff_options"] == []
+    assert "Nicht von der registrierten E-Mail-Adresse" not in back["warnings"]

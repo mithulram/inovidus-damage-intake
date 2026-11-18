@@ -66,5 +66,9 @@ def apply_human_assignment(case: CaseRecord, contract_id: str, ctx: Context) -> 
     out.match.approved_contract = contract_id
     out.prior_cases = view.prior_cases
     out.internal_task = view.internal_task
-    out.staff_options = view.staff_options  # contact options belong to the approved contract
+    # contact state (warning, options, action checks) follows the approved contract consistently
+    out.match.unknown_sender = view.match.unknown_sender
+    out.staff_options = view.staff_options
+    warning = "Nicht von der registrierten E-Mail-Adresse"
+    out.warnings = [w for w in out.warnings if w != warning] + ([warning] if out.match.unknown_sender else [])
     return out
