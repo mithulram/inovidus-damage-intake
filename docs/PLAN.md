@@ -318,3 +318,16 @@ Run: `uv run python -m intake.scenarios` (table) and `uv run pytest` (each scena
 
 ## 17. Review protocol
 Reviewer (Codex): give verdict + findings, and state **"Score: X/10"** in the summary. Loop until 10/10; minor/optional scope additions are flagged to Mithul rather than added. Log: `docs/PLAN-REVIEW-LOG.md`.
+
+## 19. Additions (Mithul, 19 Nov 2026)
+
+**Hosting (free, always reachable link):** Oracle Cloud Free Tier sign-up was blocked by Oracle's fraud check (generic "error occurred while creating your account", twice). Decision: host on **Render** (free, no card, Mithul signs in with GitHub himself).
+- Service 1: the existing FastAPI app (UI + API), Python 3.12 via uv, offline/recorded provider only (no Groq key on the host unless Mithul decides otherwise), synthetic data only.
+- Service 2: n8n 2.48.5 (Docker image) that imports and publishes `workflows/n8n_schadenmeldung.json` on every start (Render free has no persistent disk); its `api_url` points to service 1.
+- Known limits: services sleep when idle (~30–60 s wake-up), demo state resets on restart, n8n on 512 MB may be slow – fallback: host only the app, keep n8n as export + screenshots.
+- Links become public only after Mithul's explicit OK.
+
+**Bilingual DE/EN:**
+- UI: language switch in the header, German default, choice remembered per browser; all labels from one dictionary. Data-driven reasons from the API stay German (business language), with the English UI explaining the labels.
+- n8n: sticky notes German first, English below; node names "German (English)".
+- Unchanged: tenant reply follows the email's language; Inovidus deliverables stay German.
