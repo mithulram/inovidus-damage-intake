@@ -1,0 +1,44 @@
+{
+  "request": {
+    "model": "openai/gpt-oss-120b",
+    "response_format": "json_schema strict",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Du liest E-Mails an eine Hausverwaltung und gibst NUR die geforderten Felder als JSON zurück.\nRegeln:\n- Kopiere Adresse, Etage und Seite WÖRTLICH aus der E-Mail (z. B. \"Musterstr.\", \"zweite Etage\", \"links\"). Nicht umrechnen, nicht ergänzen, nicht raten.\n- tenant_name = der Vertragsinhaber, auf den sich die Mail bezieht (z. B. \"Wohnung von X\"); sonst der Unterzeichner. sender_name = wer unterschreibt.\n- Fehlt eine Angabe, setze null. Erfinde keine Daten.\n- type: SCHADENMELDUNG (Schaden/Mangel), ANFRAGE_MIETE (Miete, Nebenkosten, Kaution), SONSTIGES.\n- category (deutsch): z. B. Wasserschaden, Rohrbruch, Rohrverstopfung, Gasgeruch, Heizungsausfall, Elektrik, Schimmel, Fenster/Türen. trade: Gewerk (z. B. Sanitär).\n- urgency_hint: NOTFALL (Gefahr für Menschen/Gebäude), DRINGEND (Schaden schreitet fort), NORMAL. Begründe kurz auf Deutsch. Das Wort \"dringend\" des Mieters allein ist kein Grund.\n- language: Sprache der E-Mail (de oder en). reason und urgency_hint_reason immer auf Deutsch.\n"
+      },
+      {
+        "role": "user",
+        "content": "Betreff: Gasgeruch!\nAbsender: (unbekannt)\n\nIm Treppenhaus der Musterstraße 12 riecht es stark nach Gas. Bitte schnell kommen. Max Mustermann\n"
+      }
+    ]
+  },
+  "response": {
+    "id": "chatcmpl-deee58b6-4564-4452-9504-31ed2114096e",
+    "model": "openai/gpt-oss-120b",
+    "usage": {
+      "queue_time": 0.205954215,
+      "prompt_tokens": 796,
+      "prompt_time": 0.048124014,
+      "completion_tokens": 658,
+      "completion_time": 1.397019737,
+      "total_tokens": 1454,
+      "total_time": 1.445143751,
+      "completion_tokens_details": {
+        "reasoning_tokens": 483
+      }
+    },
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"classification\":{\"type\":\"SCHADENMELDUNG\",\"category\":\"Gasgeruch\",\"trade\":null,\"confidence\":0.95,\"reason\":\"Der Mieter meldet starken Gasgeruch im Treppenhaus, was ein möglicher Gefahrensituation entspricht.\"},\"extraction\":{\"tenant_name\":\"Max Mustermann\",\"sender_name\":\"Max Mustermann\",\"street_raw\":\"Musterstraße\",\"house_no\":\"12\",\"floor_raw\":null,\"side_raw\":null,\"room\":null,\"damage_description\":\"Starker Gasgeruch im Treppenhaus\",\"since\":null,\"photos_mentioned\":false,\"phone\":null,\"language\":\"de\"},\"urgency_hint\":\"NOTFALL\",\"urgency_hint_reason\":\"Gasgeruch kann auf ein Leck hinweisen und stellt eine akute Gefahr für Bewohner und Gebäude dar.\"}",
+          "reasoning": "We need to extract fields.\n\nEmail content: Subject Gasgeruch! Sender unknown. Body: \"Im Treppenhaus der Musterstraße 12 riecht es stark nach Gas. Bitte schnell kommen. Max Mustermann\"\n\nWe need to fill extraction fields:\n\ntenant_name: Vertragsinhaber, else Unterzeichner. Here Unterzeichner is Max Mustermann, likely tenant. So tenant_name = \"Max Mustermann\". sender_name = same? The email says \"Absender: (unbekannt)\" but the signature is Max Mustermann. So sender_name = \"Max Mustermann\". If unknown, but we have name. Use that.\n\nstreet_raw: \"Musterstraße\". house_no: \"12\". floor_raw: Not mentioned. side_raw: Not mentioned. room: Not mentioned. damage_description: \"riecht es stark nach Gas\" (gas smell). So description: \"Starker Gasgeruch im Treppenhaus\". Use that.\n\nsince: Not mentioned => null.\n\nphotos_mentioned: Not mentioned => false.\n\nphone: null.\n\nlanguage: de.\n\nNow classification: type = SCHADENMELDUNG (since gas smell is a damage/mangel). category: \"Gasgeruch\". trade: likely \"Sanitär\" or \"Heizung\"? Gas is maybe \"Heizung\" or \"Sanitär\"? Could be \"Sanitär\". But we can set trade null if uncertain. The schema allows null. Let's set trade = null.\n\nconfidence: we need a number. Probably 0.95.\n\nreason: \"Der Mieter meldet starken Gasgeruch im Treppenhaus, was ein möglicher Gefahrensituation entspricht.\"\n\nurgency_hint: This is potentially NOTFALL because gas smell can be dangerous. So NOTFALL.\n\nurgency_hint_reason: \"Gasgeruch kann auf ein Leck hinweisen und stellt eine akute Gefahr für Bewohner und Gebäude dar.\"\n\nNow ensure all required fields present.\n\nextraction fields: tenant_name, sender_name, street_raw, house_no, floor_raw, side_raw, room, damage_description, since, photos_mentioned, phone, language.\n\nSet floor_raw null, side_raw null, room null, since null, phone null.\n\nNow produce JSON compact.\n\nCheck classification fields: type, category, trade, confidence, reason.\n\ncategory: \"Gasgeruch\". trade null.\n\nNow final JSON."
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ]
+  }
+}

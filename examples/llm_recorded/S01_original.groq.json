@@ -1,0 +1,44 @@
+{
+  "request": {
+    "model": "openai/gpt-oss-120b",
+    "response_format": "json_schema strict",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Du liest E-Mails an eine Hausverwaltung und gibst NUR die geforderten Felder als JSON zurück.\nRegeln:\n- Kopiere Adresse, Etage und Seite WÖRTLICH aus der E-Mail (z. B. \"Musterstr.\", \"zweite Etage\", \"links\"). Nicht umrechnen, nicht ergänzen, nicht raten.\n- tenant_name = der Vertragsinhaber, auf den sich die Mail bezieht (z. B. \"Wohnung von X\"); sonst der Unterzeichner. sender_name = wer unterschreibt.\n- Fehlt eine Angabe, setze null. Erfinde keine Daten.\n- type: SCHADENMELDUNG (Schaden/Mangel), ANFRAGE_MIETE (Miete, Nebenkosten, Kaution), SONSTIGES.\n- category (deutsch): z. B. Wasserschaden, Rohrbruch, Rohrverstopfung, Gasgeruch, Heizungsausfall, Elektrik, Schimmel, Fenster/Türen. trade: Gewerk (z. B. Sanitär).\n- urgency_hint: NOTFALL (Gefahr für Menschen/Gebäude), DRINGEND (Schaden schreitet fort), NORMAL. Begründe kurz auf Deutsch. Das Wort \"dringend\" des Mieters allein ist kein Grund.\n- language: Sprache der E-Mail (de oder en). reason und urgency_hint_reason immer auf Deutsch.\n"
+      },
+      {
+        "role": "user",
+        "content": "Betreff: Wasserschaden Küche, Musterstraße 12\nAbsender: (unbekannt)\n\nHallo, seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen. Wir wohnen in der Musterstr. 12, zweite Etage links. Bitte dringend jemanden schicken. Fotos sind vorhanden. Viele Grüße, Max Mustermann\n"
+      }
+    ]
+  },
+  "response": {
+    "id": "chatcmpl-ee083ad5-3a06-4685-b9a5-ba7f6dd91ab8",
+    "model": "openai/gpt-oss-120b",
+    "usage": {
+      "queue_time": 0.025884837,
+      "prompt_tokens": 833,
+      "prompt_time": 0.075093194,
+      "completion_tokens": 1096,
+      "completion_time": 2.305898428,
+      "total_tokens": 1929,
+      "total_time": 2.380991622,
+      "completion_tokens_details": {
+        "reasoning_tokens": 891
+      }
+    },
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"classification\":{\"type\":\"SCHADENMELDUNG\",\"category\":\"Wasserschaden\",\"trade\":\"Sanitär\",\"confidence\":1.0,\"reason\":\"Wasserschaden in der Küche, Wasser läuft unter der Spüle und hat den Unterschrank aufgequollen.\"},\"extraction\":{\"tenant_name\":\"Max Mustermann\",\"sender_name\":\"Max Mustermann\",\"street_raw\":\"Musterstr.\",\"house_no\":\"12\",\"floor_raw\":\"zweite Etage\",\"side_raw\":\"links\",\"room\":\"Küche\",\"damage_description\":\"seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen.\",\"since\":\"seit gestern\",\"photos_mentioned\":true,\"phone\":null,\"language\":\"de\"},\"urgency_hint\":\"DRINGEND\",\"urgency_hint_reason\":\"Wasser läuft seit gestern unter der Spüle und hat bereits den Unterschrank aufgequollen, der Schaden kann sich weiter ausbreiten.\"}",
+          "reasoning": "We need to extract fields.\n\nEmail content: Subject: Wasserschaden Küche, Musterstraße 12. Sender unknown. Body: \"Hallo, seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen. Wir wohnen in der Musterstr. 12, zweite Etage links. Bitte dringend jemanden schicken. Fotos sind vorhanden. Viele Grüße, Max Mustermann\"\n\nWe need to fill JSON with classification, extraction, urgency_hint, urgency_hint_reason.\n\nFirst, classification:\ntype: SCHADENMELDUNG (damage)\ncategory: Wasserschaden (water damage)\ntrade: likely Sanitär (plumbing) maybe \"Sanitär\". Use \"Sanitär\".\nconfidence: we need a number, maybe 1.0 (high). Provide 1.0.\n\nreason: \"Wasserschaden in der Küche, Unterspüle, Schrank aufgequollen.\"\n\nurgency_hint: The tenant says \"Bitte dringend jemanden schicken.\" But we need to assess: Is it NOTFALL? Not necessarily life-threatening, but water damage can cause further damage. Could be DRINGEND because damage progresses. So urgency_hint = DRINGEND.\n\nurgency_hint_reason: \"Wasser läuft seit gestern unter der Spüle und hat bereits den Unterschrank aufgequollen, der Schaden kann sich ausbreiten.\"\n\nNow extraction fields:\n\ntenant_name: \"Wir\" refers to tenants. The contract holder? Not given. Could be \"Max Mustermann\"? The email says \"Viele Grüße, Max Mustermann\". So tenant_name = \"Max Mustermann\"? The rule: tenant_name = der Vertragsinhaber, auf den sich die Mail bezieht (z. B. \"Wohnung von X\"); sonst der Unterzeichner. So we don't know contract holder, so use sender (Max Mustermann). So tenant_name = \"Max Mustermann\". sender_name = \"Max Mustermann\". (Both same.)\n\nstreet_raw: \"Musterstr.\" (as in email: \"Musterstr. 12\"). Must copy verbatim. So \"Musterstr.\"\n\nhouse_no: \"12\"\n\nfloor_raw: \"zweite Etage\"\n\nside_raw: \"links\"\n\nroom: maybe \"Küche\". The email mentions kitchen. So room = \"Küche\". (string)\n\ndamage_description: \"seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen.\" Provide that.\n\nsince: \"seit gestern\" (the phrase). So \"seit gestern\". Could be \"seit gestern\". Provide as string.\n\nphotos_mentioned: true (Fotos sind vorhanden.)\n\nphone: not mentioned => null.\n\nlanguage: de\n\nNow ensure all fields present.\n\nJSON schema: classification object with type, category, trade, confidence, reason. extraction with many fields. urgency_hint and urgency_hint_reason.\n\nMake compact JSON.\n\nLet's construct.\n\n{\n  \"classification\": {\n    \"type\":\"SCHADENMELDUNG\",\n    \"category\":\"Wasserschaden\",\n    \"trade\":\"Sanitär\",\n    \"confidence\":1.0,\n    \"reason\":\"Wasserschaden in der Küche, Wasser läuft unter der Spüle und hat den Unterschrank aufgequollen.\"\n  },\n  \"extraction\": {\n    \"tenant_name\":\"Max Mustermann\",\n    \"sender_name\":\"Max Mustermann\",\n    \"street_raw\":\"Musterstr.\",\n    \"house_no\":\"12\",\n    \"floor_raw\":\"zweite Etage\",\n    \"side_raw\":\"links\",\n    \"room\":\"Küche\",\n    \"damage_description\":\"seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen.\",\n    \"since\":\"seit gestern\",\n    \"photos_mentioned\":true,\n    \"phone\":null,\n    \"language\":\"de\"\n  },\n  \"urgency_hint\":\"DRINGEND\",\n  \"urgency_hint_reason\":\"Wasser läuft seit gestern unter der Spüle und hat bereits den Unterschrank aufgequollen, der Schaden kann sich weiter ausbreiten.\"\n}\n\nCheck all required fields: classification includes type, category, trade, confidence, reason. extraction includes tenant_name, sender_name, street_raw, house_no, floor_raw, side_raw, room, damage_description, since, photos_mentioned, phone, language. All present.\n\nNow output only JSON."
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ]
+  }
+}
