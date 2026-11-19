@@ -22,6 +22,8 @@ Mit KI: `.env.example` nach `.env` kopieren, `GROQ_API_KEY` eintragen, im Prüfp
 
 ## Online-Demo (Render, kostenlos)
 
+**Live:** Prüfplatz https://inovidus-intake.onrender.com · n8n https://inovidus-n8n.onrender.com (Zugangsdaten auf Anfrage).
+
 `render.yaml` beschreibt zwei Dienste: den Prüfplatz (App + API) und n8n. Beide sind geschützt:
 - Prüfplatz: Passwort-Abfrage im Browser (Benutzername beliebig, Passwort = `INTAKE_ACCESS_PASSWORD`, von Render erzeugt).
 - n8n: eigenes Konto (wird beim Start aus Render-Geheimnissen angelegt); der Webhook braucht den Header `X-Webhook-Token`.
@@ -95,4 +97,4 @@ Stack: Python 3.12, Pydantic, FastAPI, rapidfuzz, a hand-built review UI (no fra
 
 Run: `uv sync && uv run intake-scenarios && uv run intake-ui`. The UI has a language switch (Deutsch / English / English + Deutsch); English mode translates every system text, the tenant reply stays in the e-mail's language. English versions of all deliverables: [deliverables/en/](deliverables/en/).
 
-Hosted demo (Render free tier, `render.yaml`): app behind a generated password, n8n with an owner account and a token-protected webhook, both created from Render-generated secrets; services sleep when idle (first request ~30–60 s).
+Hosted demo – live: https://inovidus-intake.onrender.com (review desk) and https://inovidus-n8n.onrender.com (n8n); credentials on request. Render free tier, `render.yaml`: app behind a generated password, n8n with an owner account and a token-protected webhook, both created from Render-generated secrets; services sleep when idle (first request ~30–60 s).
