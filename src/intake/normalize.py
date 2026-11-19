@@ -44,8 +44,20 @@ def normalize_house_no(house_no: str | None) -> str | None:
 # Words/signs that turn one location value into several ("2. bzw. 3. OG", "links oder rechts",
 # "Nr. 12/14"). Any provider (rules, Groq, recorded) can return such a value – it is never definite.
 _ALTERNATIVE = re.compile(r"\b(bzw|beziehungsweise|oder|or|und|and|evtl|eventuell|vielleicht|wahrscheinlich|maybe|either"
-                          r"|entweder|ca|circa)\b|/|&|\?|\.\.\.")
+                          r"|entweder|ca|circa|bis|zwischen|to|between)\b|/|&|\?|\.\.\.")
 _NUMBER_RANGE = re.compile(r"\d+\s*[a-z]?\s*[-–,+]\s*\d+")
+
+
+def _floor_mentions(text: str, rules: NormalizeRules) -> set[int]:
+    """Every floor the (folded) text names: digits, German ordinal words, English ordinals, ground-floor terms."""
+    found = {int(n) for n in re.findall(r"\d+", text)}
+    words = {fold(k): v for k, v in rules.ordinal_words.items()}
+    found |= {words[w] for w in re.findall(r"[a-z]+", text) if w in words}
+    found |= {n for w, n in {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5}.items()
+              if re.search(rf"\b{w}\b", text)}
+    if any(re.search(rf"(^|\W){re.escape(fold(t))}(\W|$)", text) for t in rules.ground_floor_terms):
+        found.add(0)
+    return found
 
 
 def compound_location(raw: str | None, field: str, rules: NormalizeRules | None = None) -> bool:
@@ -56,8 +68,7 @@ def compound_location(raw: str | None, field: str, rules: NormalizeRules | None 
     if _ALTERNATIVE.search(text) or _NUMBER_RANGE.search(text):
         return True
     if field == "floor":
-        numbers = set(re.findall(r"\d+", text))
-        return len(numbers) > 1
+        return len(_floor_mentions(text, rules)) > 1 if rules is not None else len(set(re.findall(r"\d+", text))) > 1
     if field == "side" and rules is not None:
         tokens = {t.rstrip(".") for t in re.findall(r"[a-z]+\.?", text)} | set(re.findall(r"[a-z]+\.?", text))
         sides = {side for side, terms in rules.side_terms.items() if tokens & {fold(t) for t in terms}}
@@ -73,7 +84,7 @@ def normalize_floor(raw: str | None, rules: NormalizeRules) -> tuple[int | None,
     if not raw or not raw.strip():
         return None, "missing", "Keine Etage angegeben"
     text = fold(raw)
-    if compound_location(raw, "floor"):
+    if compound_location(raw, "floor", rules):
         return None, "unclear", f"'{raw}' nennt mehrere oder unsichere Etagen"
     folded_ground = [fold(t) for t in rules.ground_floor_terms]
     if any(re.search(rf"(^|\W){re.escape(t)}(\W|$)", text) for t in folded_ground):

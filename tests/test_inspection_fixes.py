@@ -542,3 +542,23 @@ def test_store_rejects_proposal_built_on_old_basis(client):
     case = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1"}).json()
     case["processing"]["erp_version"] = "sha256:alt"
     assert client.post("/api/cases", json=case).status_code == 409
+
+
+# ---- round 12 --------------------------------------------------------------
+
+# R12-01 – a floor range or list written in words never collapses to one floor
+@pytest.mark.parametrize("floor", ["zweite bis dritte Etage", "EG, 2. OG", "zwischen 2. und 3. OG", "erste, zweite Etage",
+                                   "2nd to 3rd floor", "Erdgeschoss oder erste Etage"])
+def test_floor_range_in_words_forces_review(floor):
+    from intake.normalize import normalize_floor
+    assert normalize_floor(floor, RULES.normalize)[:2] == (None, "unclear")
+    r = match(ext(floor_raw=floor, side_raw="rechts"), InboundEmail(body="x", sender_email="max.mustermann@example.org"),
+              JsonERP(), RULES)
+    assert r.selected_contract is None and "unit_ambiguous" in {g.value for g in r.failed_gates}
+
+
+@pytest.mark.parametrize("floor,expected", [("zweite Etage", 2), ("2. OG", 2), ("im zweiten Stock", 2), ("EG", 0),
+                                            ("Erdgeschoss", 0), ("3. Obergeschoss", 3)])
+def test_single_floor_still_definite(floor, expected):
+    from intake.normalize import normalize_floor
+    assert normalize_floor(floor, RULES.normalize)[:2] == (expected, "ok")

@@ -62,3 +62,7 @@ Repo made public (Mithul's OK) so Render could read it; Render blueprint deploye
 ## Inspection 11 – full build incl. hosting (by Codex, fresh session) – **Score 8/10, 3 findings**
 R11-01 approvals were not tied to the ERP data the reviewer saw · R11-02 an LLM could return one field with alternatives ("2. bzw. 3. OG", "links bzw. rechts", "12-14") and get a definite match · R11-03 step requests of one chain could run on different rule versions.
 - Claude fixed all three: ERP fingerprint per case (409 at approval, supersede on change, audit label "neu verarbeitet (ERP-Daten geändert)"); one shared check for compound location values in every provider (floor/side → review, street/house → building uncertain); steps and stores reject a case built on other rules/ERP data (409). +13 regression tests, 851 tests, 14/14 scenarios. Commit 6e0aecd, redeployed on Render.
+
+## Inspection 12 – full build (by Codex, fresh session, 247 s) – **Score 8/10, 1 finding**
+R11-01 and R11-03 confirmed fixed. R12-01: a floor range in words ("zweite bis dritte Etage", "EG, 2. OG") still became one floor. (The runner marked the run "code changed" only because this log was committed during the review; the finding was valid.)
+- Claude fixed it: the floor check now counts every floor the value names (digits, German ordinal words, English ordinals, ground-floor terms) and treats ranges ("bis", "zwischen") as alternatives; more than one → floor unclear + review. +12 regression tests, 863 tests, 14/14 scenarios.
