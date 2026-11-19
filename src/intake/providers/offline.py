@@ -264,7 +264,7 @@ class OfflineProvider:
         sides = [m for m in re.finditer(side_pattern, raw_text, re.IGNORECASE)
                  if not anchors or any(_near(m, anchor) for anchor in anchors)]
         side = sides[0].group(0) if sides else None
-        sender_name = _signature(email.body)
+        sender_name = _signature(email.body) or (email.sender_display_name or "").strip() or None
         holder = re.search(rf"(?i:Wohnung\s+von|für\s+meinen\s+Partner)\s+({_NAME})", email.body)
         room_term = next((r for r in cfg.rooms if fold(r) in folded), None)
         room = (_raw(re.escape(room_term), raw_text) or room_term.capitalize()) if room_term else None
@@ -274,16 +274,37 @@ class OfflineProvider:
         english = {"the", "is", "our", "we", "under", "and", "since", "please", "hello", "at", "in", "of"}
         german = {"der", "die", "das", "ist", "wir", "unter", "und", "seit", "bitte", "hallo", "in", "im", "von"}
         language = "en" if sum(t in english for t in tokens) > sum(t in german for t in tokens) else "de"
-        # A negated place ("2. OG, aber nicht links") must stay visible as doubt, never as a definite value.
-        negation = re.compile(r"\b(?:nicht|kein(?:e|em|en|er)?|not|no|außer|ausser|except)\s+"
-                              r"(?:(?:im|in|auf|der|die|das|dem|den|the|on|in\s+the)\s+)*$", re.IGNORECASE)
+        # A negated place ("aber nicht links", "wir wohnen nicht mehr im 2. OG") must stay visible as doubt,
+        # never become a definite value: any negation earlier in the same clause counts.
+        negation = re.compile(r"\b(?:nicht|kein(?:e|em|en|er)?|nie|niemals|not|no|never|außer|ausser|except"
+                              r"|ehemals|früher|frueher|formerly|previously)\b", re.IGNORECASE)
         alternatives = _location_alternatives(raw_text, addresses, floors, sides, rules, len(email.body))
         for place in [*addresses, *floors, *sides]:
-            if hit := negation.search(raw_text, max(0, place.start() - 40), place.start()):
+            window = max(0, place.start() - 80)
+            boundary = max((m.end() for m in re.finditer(r"[.!?;:,\n]", raw_text[window:place.start()])),
+                           default=0) + window
+            if hit := negation.search(raw_text, boundary, place.start()):
                 alternatives.append(raw_text[hit.start():place.end()])
+        # "Am Beispielweg 7": a preposition directly before the street may belong to its name. Capitalised
+        # inside a sentence it does (street keeps it); otherwise the address is doubtful (review).
+        street_override = None
+        for place in addresses:
+            prefix = re.search(r"(?:\b(?:am|im|zum|zur|an\s+de[rmn]|auf\s+de[rmn]|hinter\s+de[rmn]|unter\s+den|vor\s+dem"
+                               r"|in\s+den|bei\s+der|über\s+dem)\s+)$", raw_text[max(0, place.start() - 20):place.start()],
+                               re.IGNORECASE)
+            if not prefix or fold(place.group("street")).startswith(("am ", "im ", "zum ", "zur ", "an ", "auf ")):
+                continue
+            start = place.start() - len(prefix.group(0))
+            before = raw_text[:start].rstrip()
+            mid_sentence = bool(before) and before[-1] not in ".!?:\n"
+            if prefix.group(0)[0].isupper() and mid_sentence:
+                if place is address:
+                    street_override = raw_text[start:place.end("street")]
+            else:
+                alternatives.append(raw_text[start:place.end()])
         extraction = Extraction(
             sender_name=sender_name, tenant_name=holder.group(1) if holder else sender_name,
-            street_raw=address.group("street") if address else None,
+            street_raw=(street_override or address.group("street")) if address else None,
             house_no=address.group("number") if address else None,
             floor_raw=floor.group(0) if floor else None, side_raw=side, room=room,
             location_alternatives=list(dict.fromkeys(alternatives)),

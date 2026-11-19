@@ -690,3 +690,48 @@ def test_sealed_case_survives_a_javascript_round_trip(client):
             return [i for v in x for i in ints(v)]
         return []
     assert all(abs(i) < 2**53 for i in ints(case))
+
+
+# ---- round 15 --------------------------------------------------------------
+
+# R15-01 – negation anywhere earlier in the clause ("nicht mehr im 2. OG") is doubt
+@pytest.mark.parametrize("text", ["Musterstraße 12. Wir wohnen nicht mehr im 2. OG links.",
+                                  "Musterstraße 12. Früher im 2. OG links, jetzt woanders."])
+def test_negated_clause_forces_review(client, text):
+    case = _process(client, f"Wasser läuft aus der Spüle. {text} Viele Grüße, Max Mustermann")
+    assert case["status"] == "NEEDS_REVIEW" and case["match"]["selected_contract"] is None
+
+
+def test_negation_in_other_clause_does_not_block(client):
+    case = _process(client, "Die Spüle ist nicht dicht, Wasser läuft aus der Spüle. Musterstraße 12, zweite Etage links. "
+                            "Viele Grüße, Max Mustermann")
+    assert case["status"] == "READY_FOR_APPROVAL" and case["match"]["selected_contract"] == "MV-10245"
+
+
+# R15-02 – a street-name preposition is kept or makes the address doubtful, never silently dropped
+@pytest.mark.parametrize("text", ["Adresse: Am Beispielweg 7, 1. OG links.", "Wir wohnen am Beispielweg 7, 1. OG links."])
+def test_street_prefix_is_not_dropped(client, text):
+    case = client.post("/api/process", json={"email": {"subject": "Schaden", "body": f"Wasser läuft aus der Spüle. {text} "
+                                             "Viele Grüße, Maximilian Muster"}}).json()
+    assert case["status"] == "NEEDS_REVIEW" and case["match"]["selected_contract"] is None
+
+
+def test_capitalised_street_prefix_mid_sentence_is_part_of_name():
+    from intake.providers.offline import OfflineProvider
+    e = OfflineProvider().understand(InboundEmail(subject="x", body="Wasser läuft aus der Spüle in Am Beispielweg 7, "
+                                                  "1. OG links. Viele Grüße, Maximilian Muster"), RULES).extraction
+    assert e.street_raw == "Am Beispielweg"
+
+
+# R15-03 – the e-mail header name counts as the writer for every provider
+def test_header_name_of_other_person_forces_identity_review(client):
+    body = {"subject": "Schaden", "sender_display_name": "Erika Muster", "sender_email": "erika.muster@example.net",
+            "body": "Wasser läuft aus der Spüle. Wohnung von Max Mustermann, Musterstraße 12, 2. OG links."}
+    case = client.post("/api/process", json={"email": body}).json()
+    assert case["status"] == "NEEDS_REVIEW" and "identity" in case["match"]["failed_gates"]
+
+
+def test_header_name_reaches_the_llm_message():
+    from intake.providers.llm_schema import build_user_message
+    msg = build_user_message(InboundEmail(body="x", sender_email="e@example.net", sender_display_name="Erika Muster"))
+    assert "Erika Muster <e@example.net>" in msg

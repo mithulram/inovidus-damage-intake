@@ -273,9 +273,10 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
         name_sig = next(s for s in winner.signals if s.name == "name")
         if name_sig.result == "partial":
             fail(Gate.IDENTITY, f"Name weicht ab: '{name_sig.email_value}' vs. '{winner.tenant_name}'")
-        if ext.sender_name and _name_similarity(ext.sender_name, winner.tenant_name) < rules.match.name_full_min \
-                and name_sig.result != "partial":
-            fail(Gate.IDENTITY, f"Absender '{ext.sender_name}' ist nicht Vertragsinhaber ({winner.tenant_name})")
+        # Who wrote: the signature (reader) AND the e-mail header name – either one differing from the holder counts.
+        for writer in dict.fromkeys(n.strip() for n in (ext.sender_name, email.sender_display_name) if n and n.strip()):
+            if _name_similarity(writer, winner.tenant_name) < rules.match.name_full_min and name_sig.result != "partial":
+                fail(Gate.IDENTITY, f"Absender '{writer}' ist nicht Vertragsinhaber ({winner.tenant_name})")
         # Unknown sender is about the e-mail address only – a matching phone number earns points
         # but does not make an unregistered address "registered".
         sender = (email.sender_email or "").strip().lower()

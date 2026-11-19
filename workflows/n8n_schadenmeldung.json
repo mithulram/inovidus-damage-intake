@@ -51,7 +51,7 @@
               "id": "c52a6139-f674-4602-84df-afb8dacef928",
               "name": "email",
               "type": "object",
-              "value": "={{ { subject: $json.body.subject || '', body: $json.body.body || $json.body.text || '', sender_email: $json.body.sender_email || $json.body.from || null, message_id: $json.body.message_id || null, received_at: $json.body.received_at || null, attachments: $json.body.attachments || [] } }}"
+              "value": "={{ { subject: $json.body.subject || '', body: $json.body.body || $json.body.text || '', sender_email: $json.body.sender_email || $json.body.from || null, sender_display_name: $json.body.sender_display_name || $json.body.from_name || null, message_id: $json.body.message_id || null, received_at: $json.body.received_at || null, attachments: $json.body.attachments || [] } }}"
             },
             {
               "id": "1b7d400c-71f3-47c5-a56a-c723c68c9b03",

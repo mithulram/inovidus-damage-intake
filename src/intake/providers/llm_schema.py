@@ -18,7 +18,10 @@ SYSTEM_PROMPT_PATH = ROOT / "config/prompts/understanding_system.txt"
 
 
 def build_user_message(email: InboundEmail) -> str:
-    return f"Betreff: {email.subject}\nAbsender: {email.sender_email or '(unbekannt)'}\n\n{email.body}"
+    sender = email.sender_email or "(unbekannt)"
+    if email.sender_display_name:
+        sender = f"{email.sender_display_name} <{sender}>"
+    return f"Betreff: {email.subject}\nAbsender: {sender}\n\n{email.body}"
 
 
 def _validate(value: Any, schema: dict) -> None:
