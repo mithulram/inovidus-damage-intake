@@ -6,7 +6,7 @@
 
 - The original e-mail is assigned to **MV-10245** (0.90 points). MV-10487 is excluded with a reason ("floor contradicts: 2. OG ≠ 3. OG").
 - The earlier "Rohrverstopfung Küche" is recognised as a **possible connection** and goes into the internal task – not into the reply to the tenant.
-- **14 scenarios** run automatically (e.g. no floor, inactive contract, other sender, gas emergency, rent question, English, lowered threshold). All behave as expected. Over 700 automated tests in total, including the findings of eight independent code inspections.
+- **14 scenarios** run automatically (e.g. no floor, inactive contract, other sender, gas emergency, rent question, English, lowered threshold). All behave as expected. Almost 900 automated tests in total, including the findings of 16 independent code inspections by Codex.
 - Runs without an API key (rule mode) and with Groq (live or recorded).
 - n8n workflow with one node per step, actually executed; the result lands in the review list.
 - Case-worker UI in German and English: reasons, building grid, approval with stamp, audit log. **There is no send button.**

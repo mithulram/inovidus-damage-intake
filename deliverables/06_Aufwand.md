@@ -18,19 +18,19 @@ Nur die Zeilen, die im Timelog als **Core** markiert sind:
 
 Der Kern lag damit **deutlich unter 90 Minuten**. Meine eigene Zeit zum Lesen und Prüfen ist darin nicht enthalten.
 
-## 2. Gesamter Zeitraum und aktive Arbeitszeit (Stand 19.11.2026, ca. 02:00)
+## 2. Gesamter Zeitraum und aktive Arbeitszeit (Stand 19.11.2026, 06:17)
 
 | Maß | Wert |
 |---|---|
-| Kalender-Zeitraum | 18.11.2026, 19:08 bis 19.11.2026, ca. 02:00 |
-| davon **Wartezeit** (Codex-Nutzungsgrenze erreicht, Pause) | ca. 22:00 bis 00:17 = ca. 2 h 15 min |
-| **Aktive Arbeitszeit** (KI-gestützt, ohne Wartezeit) | ca. **4 h 35 min** (19:08–22:00 und 00:17–ca. 02:00) |
+| Kalender-Zeitraum | 18.11.2026, 19:08 bis 19.11.2026, 06:17 |
+| davon **Wartezeit** (Nutzungsgrenzen erreicht, Pausen) | 22:00–00:17, 01:53–02:25 und 02:33–05:01 = ca. 5 h 13 min |
+| **Aktive Arbeitszeit** (KI-gestützt, ohne Wartezeit) | ca. **5 h 52 min** (19:08–22:00, 00:17–01:53, 02:25–02:33, 05:01–06:17) |
 
 Alles außerhalb des Kerns ist im Timelog als **Extra** markiert:
 - meine Entscheidungen zu offenen Fragen und die Installation der Design-Werkzeuge (19:21–20:07),
 - Groq-Anbindung, API, Oberfläche, n8n-Workflow, Bildschirmfotos,
-- zehn unabhängige Code-Prüfungen durch Codex und die Korrekturen,
-- zweisprachige Oberfläche, n8n und Unterlagen (Deutsch/Englisch), Vorbereitung des Hostings (Render),
+- 16 unabhängige Code-Prüfungen durch Codex und die Korrekturen (die 17. Runde stoppte an der Codex-Nutzungsgrenze),
+- zweisprachige Oberfläche, n8n und Unterlagen (Deutsch/Englisch), Hosting auf Render,
 - Unterlagen und Beispiele.
 
 Weil Claude und Codex teilweise gleichzeitig gearbeitet haben, ist die Summe der einzelnen Timelog-Zeilen größer als die aktive Arbeitszeit.

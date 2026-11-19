@@ -31,3 +31,7 @@ Note: rows overlap because Claude and Codex worked in parallel. Mithul's own tim
 | 2026-11-19 | 00:29 | 00:36 | Codex → Claude | Inspection round 6 (7/10, 5 findings); Claude fixes | Extra |
 | 2026-11-19 | 00:45 | 00:46 | Codex → Claude | Inspection round 7 (8/10, 2 findings); fixes (Claude + Codex WO7) | Extra |
 | 2026-11-19 | 00:50 | 02:00 | Claude (+ Codex WO8–WO10, inspections 8–10) | Takeover from forked session; §19: translation layer + language switch, bilingual n8n, English deliverables, Render blueprint + n8n start script (rehearsed), webhook token; fixes for rounds 8–10; screenshots. Codex usage limit again at ~01:45 (resets 05:17) | Extra |
+| 2026-11-19 | 02:25 | 02:33 | Claude | Repo made public (Mithul's OK); Render blueprint deploy of both services started 02:27, live 02:37 | Extra |
+| 2026-11-19 | 02:33 | 05:01 | – | Pause (usage limits); no work | – |
+| 2026-11-19 | 05:01 | 05:11 | Claude | Verified hosted services without credentials (401/403, no n8n setup page); live URLs in README | Extra |
+| 2026-11-19 | 05:11 | 06:17 | Codex → Claude | Inspection rounds 11–16 (8, 8, 7, 8, 7, 8 /10) and Claude's fixes after each (ERP fingerprint, compound/negated places, server seal, step order); redeploys on Render; checks through local n8n + browser. Codex usage limit again at 06:17 (resets 10:20) | Extra |

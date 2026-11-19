@@ -31,3 +31,9 @@ flowchart LR
 | ERP-Anbindung | Verträge, Objekte, Vorgänge lesen | Schnittstelle `ERPConnector`, im Prototyp JSON | echtes ERP später austauschbar, schreibt nur nach Freigabe |
 | Sachbearbeiter-Oberfläche | Prüfliste, Begründungen, Freigabe, Protokoll | HTML/CSS/JS, von FastAPI ausgeliefert | ohne Build-Schritt, läuft offline |
 | Aktions-Prüfung + Protokoll | einzige Stelle, die handeln darf | `actions.execute` + Audit-Log (JSONL) | ohne Freigabe keine Aktion am Vertrag |
+
+## Schutz vor veralteten oder veränderten Vorschlägen
+- **Stand wird festgehalten:** Jeder Vorgang merkt sich, mit welchen Regeln und welchen ERP-Daten er geprüft wurde. Ändert sich eins davon, ist eine Freigabe nicht mehr möglich. Der Vorgang wird neu verarbeitet, frühere Freigaben gelten nicht mehr.
+- **Siegel des Servers:** Jeder Vorschlag bekommt ein digitales Siegel (HMAC). Ein geänderter Vorschlag (z. B. anderer Vertrag, anderer Status) wird nicht angenommen.
+- **Feste Reihenfolge:** Die sechs Schritte laufen genau einmal und in dieser Reihenfolge. Nur fertig verarbeitete Vorgänge kommen in die Prüfliste.
+- **Unklare Orte:** Mehrere oder verneinte Angaben („2. bzw. 3. OG“, „nicht links“, „12–14“) sind nie eindeutig → „Prüfung nötig“.

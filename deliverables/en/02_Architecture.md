@@ -34,3 +34,9 @@ flowchart LR
 | Case-worker UI | review list, reasons, approval, audit log; German / English | HTML/CSS/JS served by FastAPI | no build step, runs offline |
 | Translation | every system text German → English | deterministic patterns (`i18n.py`), `/api/translate` | English for non-German readers without an LLM |
 | Action check + audit log | the only place allowed to act | `actions.execute` + audit log (JSONL) | no contract action without approval |
+
+## Protection against outdated or edited proposals
+- **Basis is recorded:** every case remembers which rules and which ERP data it was checked with. If either changes, approval is no longer possible; the case is processed again and earlier approvals no longer count.
+- **Server seal:** every proposal carries a digital seal (HMAC). An edited proposal (e.g. another contract or status) is refused.
+- **Fixed order:** the six steps run exactly once and in order. Only completely processed cases enter the review list.
+- **Unclear places:** several or negated details ("2. bzw. 3. OG", "nicht links", "12–14") are never definite → "review needed".

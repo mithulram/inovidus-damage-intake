@@ -20,15 +20,15 @@ Only the rows marked **Core** in the timelog:
 
 So the core was **well under 90 minutes**. My own time for reading and checking is not included.
 
-## 2. Total span and active working time (as of 19 Nov 2026, approx. 02:00)
+## 2. Total span and active working time (as of 19 Nov 2026, 06:17)
 
 | Measure | Value |
 |---|---|
-| Calendar span | 18 Nov 2026, 19:08 to 19 Nov 2026, approx. 02:00 |
-| of which **waiting time** (Codex usage limit reached, pause) | approx. 22:00 to 00:17 = approx. 2 h 15 min |
-| **Active working time** (AI-assisted, without waiting) | approx. **4 h 35 min** (19:08–22:00 and 00:17–approx. 02:00) |
+| Calendar span | 18 Nov 2026, 19:08 to 19 Nov 2026, 06:17 |
+| of which **waiting time** (usage limits reached, pauses) | 22:00–00:17, 01:53–02:25 and 02:33–05:01 = approx. 5 h 13 min |
+| **Active working time** (AI-assisted, without waiting) | approx. **5 h 52 min** (19:08–22:00, 00:17–01:53, 02:25–02:33, 05:01–06:17) |
 
-Everything outside the core is marked **Extra** in the timelog: my decisions on open questions and installing the design tools (19:21–20:07); Groq connection, API, UI, n8n workflow, screenshots; ten independent code inspections by Codex and the fixes; bilingual UI, n8n and documents (German/English), hosting preparation (Render); documents and examples.
+Everything outside the core is marked **Extra** in the timelog: my decisions on open questions and installing the design tools (19:21–20:07); Groq connection, API, UI, n8n workflow, screenshots; 16 independent code inspections by Codex and the fixes (the 17th round stopped at the Codex usage limit); bilingual UI, n8n and documents (German/English), hosting on Render; documents and examples.
 
 Because Claude and Codex partly worked in parallel, the sum of the individual timelog rows is larger than the active working time.
 
