@@ -828,3 +828,19 @@ def test_proxy_review_holds_with_lowered_threshold():
     r = match(ext(tenant_name=None, on_behalf_of="für meine Mutter"),
               InboundEmail(body="x", sender_email="max.mustermann@example.org"), JsonERP(), rules)
     assert r.selected_contract is None and "identity" in {g.value for g in r.failed_gates}
+
+
+# ---- round 18 --------------------------------------------------------------
+
+# R18-04 – same message id with different content never returns the old (approved) decision
+def test_same_message_id_different_content_is_conflict(client):
+    first = {"subject": "Schaden", "message_id": "<abc@example.org>", "sender_email": "max.mustermann@example.org",
+             "body": "Wasser läuft aus der Spüle. Musterstraße 12, 2. OG links. Viele Grüße, Max Mustermann"}
+    case = client.post("/api/process", json={"email": first, "store": True}).json()
+    client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                      "contract_id": "MV-10245"})
+    changed = dict(first, body="Gasgeruch! Musterstraße 12, 3. OG rechts. Viele Grüße, Max Mustermann")
+    r = client.post("/api/process", json={"email": changed, "store": True})
+    assert r.status_code == 409 and "anderer Inhalt" in r.json()["detail"]
+    same = client.post("/api/process", json={"email": first, "store": True})
+    assert same.status_code == 200  # an identical replay is still fine

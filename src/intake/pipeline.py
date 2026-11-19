@@ -18,7 +18,8 @@ LAST_STEP = list(STEPS)[-1]
 def new_case(email: InboundEmail, ctx: Context, scenario_id: str | None = None) -> CaseRecord:
     now = ctx.now()
     received = email.received_at or now
-    seed = email.message_id or f"{email.subject}\n{email.body}\n{email.sender_email}"
+    seed = email.message_id or (f"{email.subject}\n{email.body}\n{email.sender_email}"
+                                + (f"\n{email.sender_display_name}" if email.sender_display_name else ""))
     if scenario_id:  # demo scenarios share e-mails but differ in ERP/rule overrides
         seed = f"{scenario_id}\n{seed}"
     short = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:6].upper()

@@ -324,3 +324,43 @@ def test_new_flag_texts_have_english():
               InboundEmail(body="x", sender_email=MAX), JsonERP(), RULES)
     texts = [f.message for f in r.flags if "PLZ/Ort" in f.message or "andere Person" in f.message]
     assert len(texts) == 2 and all(translate(t) for t in texts)
+
+
+# --- Codex round 18 ---------------------------------------------------------------------
+@pytest.mark.parametrize("extra,building", [("Wir wohnen im Hinterhaus.", True), ("Es ist die Wohnung 5.", False)])
+def test_qualifier_in_another_sentence_is_review(extra, building):
+    case = run(f"Musterstraße 12, zweite Etage links. {extra}")
+    assert case.status.value == "NEEDS_REVIEW" and case.match.building_uncertain is building
+
+
+def test_qualifier_in_subject_is_review():
+    ctx = Context.build(provider=OfflineProvider())
+    case = process(InboundEmail(subject="Wasserschaden Hinterhaus", body="Wasser läuft aus der Spüle. Musterstraße 12, "
+                                "zweite Etage links. Viele Grüße, Max Mustermann", sender_email=MAX), ctx)
+    assert case.status.value == "NEEDS_REVIEW" and case.match.building_uncertain is True
+
+
+@pytest.mark.parametrize("extra,building", [("Wir wohnen im Hinterhaus.", True), ("Es ist Wohnung 5.", False)])
+def test_ai_reader_gets_qualifier_checks(extra, building):
+    from intake.models import Classification, MessageType, Understanding
+
+    class FakeAI:
+        name = "groq"
+
+        def understand(self, email, rules):
+            ext = Extraction(tenant_name="Max Mustermann", sender_name="Max Mustermann", street_raw="Musterstraße",
+                             house_no="12", floor_raw="zweite Etage", side_raw="links")
+            cls = Classification(type=MessageType.SCHADENMELDUNG, category=None, trade=None, confidence=0.9,
+                                 reason="test")
+            return Understanding(classification=cls, extraction=ext, provider="groq")
+
+    body = f"Wasser läuft aus. Musterstraße 12, zweite Etage links. {extra} Max Mustermann"
+    case = process(InboundEmail(subject="Schaden", body=body, sender_email=MAX), Context.build(provider=FakeAI()))
+    assert case.status.value == "NEEDS_REVIEW" and case.match.building_uncertain is building
+
+
+def test_crlf_address_block_postcode_is_checked():
+    ctx = Context.build(provider=OfflineProvider())
+    body = "Wasser läuft aus der Spüle.\r\nMusterstraße 12\r\n54321 Anderstadt\r\n2. OG links.\r\nViele Grüße, Max Mustermann"
+    case = process(InboundEmail(subject="Schaden", body=body, sender_email=MAX), ctx)
+    assert case.understanding.extraction.postal_raw == "54321 Anderstadt" and case.status.value == "NEEDS_REVIEW"

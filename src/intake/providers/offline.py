@@ -84,12 +84,12 @@ def _postal_near(body: str, address: re.Match, rules: Rules) -> str | None:
     not_town = {fold(w) for w in [*_NOT_TOWN, *rules.classification.rooms, *rules.normalize.ground_floor_terms,
                                   *rules.normalize.unclear_floor_terms, *rules.normalize.building_part_words,
                                   *rules.normalize.building_part_prefixes]}
-    after = re.match(r"[ \t]*[,\n]?[ \t]*(?:in[ \t]+)?(?P<zip>\d{5})(?!\d)(?:[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+))?"
-                     r"|[ \t]*[,\n]?[ \t]*in[ \t]+(?P<town>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)(?=\s*(?:[,\n.!?;(–-]|$|im\b|in\b|am\b|auf\b|\d))",
+    after = re.match(r"[ \t]*(?:,|\r?\n)?[ \t]*(?:in[ \t]+)?(?P<zip>\d{5})(?!\d)(?:[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+))?"
+                     r"|[ \t]*(?:,|\r?\n)?[ \t]*in[ \t]+(?P<town>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)(?=\s*(?:[,\r\n.!?;(–-]|$|im\b|in\b|am\b|auf\b|\d))",
                      body[address.end():])
     ahead = body[max(0, address.start() - 60):address.start()]
-    before = (re.search(r"(?P<zip>\d{5})[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)[ \t]*[,\n]?[ \t]*$", ahead)
-              or re.search(r"\b[Ii]n[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)[ \t]*[,\n]?[ \t]*(?:in[ \t]+der[ \t]+)?$", ahead))
+    before = (re.search(r"(?P<zip>\d{5})[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)[ \t\r]*(?:,|\r?\n)?[ \t\r]*$", ahead)
+              or re.search(r"\b[Ii]n[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)[ \t\r]*(?:,|\r?\n)?[ \t\r]*(?:in[ \t]+der[ \t]+)?$", ahead))
     hit = after or before
     if not hit:
         return None
@@ -98,6 +98,23 @@ def _postal_near(body: str, address: re.Match, rules: Rules) -> str | None:
     if town and (fold(town).split()[-1] in not_town or _NOT_TOWN_SUFFIX.search(fold(town).split()[-1])):
         town = None
     return " ".join(p for p in (zip_code, town) if p) or None
+
+
+def location_qualifiers(email: InboundEmail, rules: Rules, unit_text: str = "") -> list[str]:
+    """Building parts and flat numbers anywhere in subject or body – for EVERY reader (fail-safe doubt).
+
+    "Hinterhaus", "Haus B", "Aufgang 2" -> doubt about the building; "Wohnung 5" -> doubt about the flat only
+    (written with the floor/side text, or "Etage/Seite unklar", so matching keeps the building certain).
+    """
+    words = "|".join(map(re.escape, rules.normalize.building_part_words))
+    prefixes = "|".join(map(re.escape, rules.normalize.building_part_prefixes))
+    part = re.compile(rf"(?i:\b(?:{words})\b)|(?i:\b(?:{prefixes}))[ \t]+(?:[A-Z]|\d{{1,3}})\b"
+                      r"(?!\s*\.?\s*(?i:OG|Obergeschoss|Etage|Stock)\b)" + _NOT_DESIGNATOR)
+    out = []
+    for text in (email.body, email.subject):
+        out += [m.group(0) for m in part.finditer(text)]
+        out += [f"{m.group(0)}, {unit_text or 'Etage/Seite unklar'}" for m in _FLAT.finditer(text)]
+    return list(dict.fromkeys(out))
 
 
 def postal_for(email: InboundEmail, rules: Rules, street_raw: str | None, house_no: str | None) -> str | None:
@@ -399,38 +416,11 @@ class OfflineProvider:
         # --- Around the main address: postcode/town, building parts, flat numbers (all fail-safe) ------
         postal_raw = None
         body_address = next((a for a in addresses if a.start() < body_len), None)
-        place_spans = [m for m in (body_address, *(f for f in floors[:1] if f.start() < body_len),
-                                   *(s for s in sides[:1] if s.start() < body_len)) if m is not None]
         if body_address is not None:
             postal_raw = _postal_near(email.body, body_address, rules)
 
-        def sentence_of(pos: int) -> tuple[int, int]:
-            """Sentence (or address block) around pos in the body: ends at ! ? ;, a blank line, or a full stop
-            that is not part of "Str.", "Nr.", "2." etc. A single line break is not an end (address blocks)."""
-            end_re = re.compile(r"[!?;]|\n[ \t]*\n|(?<![\d])(?<![Ss]tr)(?<![Nn]r)(?<![Hh]sn)(?<![Ww]hg)(?<!li)(?<!re)\.(?=\s+[A-ZÄÖÜ]|\s*$)")
-            start = max((m.end() for m in end_re.finditer(email.body, 0, pos)), default=0)
-            stop = end_re.search(email.body, pos)
-            return start, stop.start() if stop else body_len
-
-        if body_address is not None:
-            lo, hi = sentence_of(body_address.start())
-            words = "|".join(map(re.escape, rules.normalize.building_part_words))
-            prefixes = "|".join(map(re.escape, rules.normalize.building_part_prefixes))
-            part = re.compile(rf"(?i:\b(?:{words})\b)|(?i:\b(?:{prefixes}))[ \t]+(?:[A-Z]|\d{{1,3}})\b"
-                              r"(?!\s*\.?\s*(?i:OG|Obergeschoss|Etage|Stock)\b)" + _NOT_DESIGNATOR)
-            for m in part.finditer(email.body, lo, hi):
-                if not (body_address.start() <= m.start() < body_address.end()):
-                    alternatives.append(f"{body_address.group(0)} {m.group(0)}")
-        if place_spans:
-            unit_text = " ".join(m.group(0) for m in (*floors[:1], *sides[:1]) if m.start() < body_len)
-            seen_spans = set()
-            for anchor_span in place_spans:
-                lo, hi = sentence_of(anchor_span.start())
-                if (lo, hi) in seen_spans:
-                    continue
-                seen_spans.add((lo, hi))
-                for m in _FLAT.finditer(email.body, lo, hi):
-                    alternatives.append(f"{m.group(0)}, {unit_text}".rstrip(", ") if unit_text else m.group(0))
+        unit_text = " ".join(m.group(0) for m in (*floors[:1], *sides[:1]) if m.start() < body_len)
+        alternatives += location_qualifiers(email, rules, unit_text)
 
         extraction = Extraction(
             sender_name=sender_name,

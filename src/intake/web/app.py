@@ -159,6 +159,10 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
         except ValueError:
             raise HTTPException(422, "Ungültige Vorgangs-ID") from None
         label = "in Prüfliste übernommen"
+        if existing is not None and existing.input.model_dump() != case.input.model_dump():
+            # same message id, different content: never answer with the old decision
+            raise HTTPException(409, "Gleiche Nachrichten-ID, aber anderer Inhalt – bitte als neue Nachricht "
+                                     "(eigene ID) verarbeiten.")
         if existing is not None:
             old_gen, new_gen = existing.processing.generation, case.processing.generation
             if old_gen is not None and old_gen > 10**17:
