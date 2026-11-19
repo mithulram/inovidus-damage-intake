@@ -32,37 +32,47 @@
   <header class="shell-bar">
     <div class="brand">
       <span class="brand-mark" aria-hidden="true"></span>
-      <span class="brand-name">Schadenmeldungen</span>
-      <span class="brand-sub">Prüfplatz · Prototyp</span>
+      <span class="brand-name" data-t="brand">Schadenmeldungen</span>
+      <span class="brand-sub" data-t="brandSub">Prüfplatz · Prototyp</span>
     </div>
     <nav class="views" aria-label="Ansichten">
-      <button class="view-tab" data-view="case" aria-current="page">Vorgang</button>
-      <button class="view-tab" data-view="rules">Regeln</button>
-      <button class="view-tab" data-view="audit">Protokoll</button>
-      <button class="view-tab" data-view="flow">Ablauf</button>
+      <button class="view-tab" data-view="case" aria-current="page" data-t="tabCase">Vorgang</button>
+      <button class="view-tab" data-view="rules" data-t="tabRules">Regeln</button>
+      <button class="view-tab" data-view="audit" data-t="tabAudit">Protokoll</button>
+      <button class="view-tab" data-view="flow" data-t="tabFlow">Ablauf</button>
     </nav>
-    <label class="reader">
-      <span>Leser</span>
-      <select id="provider" aria-label="Wer liest die E-Mail?">
-        <option value="offline">Regeln (ohne KI)</option>
-        <option value="recorded">Groq · Aufzeichnung</option>
-        <option value="groq">Groq · live</option>
-      </select>
-    </label>
+    <div class="bar-right">
+      <label class="reader">
+        <span data-t="reader">Leser</span>
+        <select id="provider" aria-label="Leser / Reader">
+          <option value="offline" data-t="provOffline">Regeln (ohne KI)</option>
+          <option value="recorded" data-t="provRecorded">Groq · Aufzeichnung</option>
+          <option value="groq" data-t="provGroq">Groq · live</option>
+        </select>
+      </label>
+      <label class="reader">
+        <span data-t="lang">Sprache</span>
+        <select id="lang" aria-label="Sprache / Language">
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+          <option value="both">English + Deutsch</option>
+        </select>
+      </label>
+    </div>
   </header>
 
   <div class="workspace">
     <aside class="inbox" aria-label="Posteingang">
       <div class="inbox-head">
-        <h2>Posteingang</h2>
+        <h2 data-t="inbox">Posteingang</h2>
         <div class="segmented" role="tablist" aria-label="Quelle">
-          <button role="tab" aria-selected="true" data-source="demo">Beispiele</button>
-          <button role="tab" aria-selected="false" data-source="store">Prüfliste</button>
+          <button role="tab" aria-selected="true" data-source="demo" data-t="srcDemo">Beispiele</button>
+          <button role="tab" aria-selected="false" data-source="store" data-t="srcStore">Prüfliste</button>
         </div>
       </div>
       <p class="inbox-note" id="inbox-note">Dringendes steht oben.</p>
       <ol class="inbox-list" id="inbox-list" aria-live="polite"></ol>
-      <button class="ghost-btn new-mail" id="new-mail"><svg><use href="#i-plus"/></svg>Eigene E-Mail prüfen</button>
+      <button class="ghost-btn new-mail" id="new-mail"><svg><use href="#i-plus"/></svg><span data-t="newMail">Eigene E-Mail prüfen</span></button>
     </aside>
 
     <main class="desk" id="desk" tabindex="-1">

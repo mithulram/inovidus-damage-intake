@@ -1,31 +1,19 @@
-// Schadenmeldungen · Prüfplatz – vanilla JS, no build step.
+// Schadenmeldungen · Prüfplatz – vanilla JS, no build step. German default, English on request.
 // The UI only displays and asks; every decision comes from the API, every action goes through /api/approve.
+import { L } from "/static/i18n.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const num = (v, d = 2) => (v == null ? "–" : Number(v).toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d }));
 const icon = (id) => `<svg aria-hidden="true"><use href="#i-${id}"/></svg>`;
-const time = (iso) => (iso ? new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–");
 const cap = (v) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : v);
-function readerLabel(p) {
-  const name = { offline: "Regeln (ohne KI)", groq: "Groq", "recorded(groq)": "Groq (Aufzeichnung)", "groq→offline": "Regeln – Groq nicht verfügbar" }[p.provider] || p.provider;
-  return p.model ? `${name} · ${p.model}` : name;
-}
-const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "");
 
-const STATUS = {
-  READY_FOR_APPROVAL: { label: "Bitte freigeben", long: "Zuordnung eindeutig – bitte prüfen und freigeben", icon: "ready" },
-  NEEDS_REVIEW: { label: "Prüfung nötig", long: "Prüfung nötig – das System rät nicht", icon: "review" },
-  OUT_OF_SCOPE: { label: "Weiterleiten", long: "Keine Schadenmeldung – weiterleiten", icon: "route" },
-};
-const URG_RANK = { NOTFALL: 0, DRINGEND: 1, NORMAL: 2 };
-const SIG_LABEL = { name: "Name", address: "Adresse", floor: "Etage", side: "Seite", contact: "Kontakt" };
-const SIG_TEXT = { match: "passt", partial: "teilweise", missing: "fehlt", mismatch: "widerspricht" };
-const PROVIDER_LABEL = { offline: "Regeln (ohne KI)", recorded: "Groq (Aufzeichnung)", groq: "Groq live" };
+function localGet(k) { try { return localStorage.getItem("intake." + k); } catch { return null; } }
+function localSet(k, v) { try { localStorage.setItem("intake." + k, v); } catch { /* private mode */ } }
 
 const state = {
   provider: localGet("provider") || "offline",
+  lang: localGet("lang") || "de",            // de | en | both (English with German original)
   source: "demo",
   scenarios: [],
   results: new Map(),   // scenario id -> case
@@ -34,10 +22,74 @@ const state = {
   sheet: "reply",
   rules: null,
   actor: localGet("actor") || "Sachbearbeitung",
+  tx: new Map(),        // German system text -> English (or null)
 };
 
-function localGet(k) { try { return localStorage.getItem("intake." + k); } catch { return null; } }
-function localSet(k, v) { try { localStorage.setItem("intake." + k, v); } catch { /* private mode */ } }
+/* ------------------------------------------------------------------ language */
+
+const ui = () => L[state.lang === "de" ? "de" : "en"];
+function t(key, ...args) { const v = ui()[key] ?? L.de[key] ?? key; return typeof v === "function" ? v(...args) : v; }
+const num = (v, d = 2) => (v == null ? "–" : Number(v).toLocaleString(ui().numLocale, { minimumFractionDigits: d, maximumFractionDigits: d }));
+const time = (iso) => (iso ? new Date(iso).toLocaleString(ui().numLocale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–");
+const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString(ui().numLocale, { hour: "2-digit", minute: "2-digit" }) : "");
+
+// A German system text (reason, gate, task item …) rendered in the chosen language.
+// en: English only (German on hover); both: English + German original; untranslatable free text stays German, labelled.
+function X(de, { free = false } = {}) {
+  if (de == null || de === "") return "";
+  if (state.lang === "de") return esc(de);
+  const en = state.tx.get(de);
+  if (en) {
+    return state.lang === "both"
+      ? `${esc(en)}<span class="orig" lang="de">${esc(de)}</span>`
+      : `<span title="DE: ${esc(de)}">${esc(en)}</span>`;
+  }
+  return `<span lang="de">${esc(de)}</span>${free ? ` <span class="untr">${esc(t("aiFree"))} · DE</span>` : ""}`;
+}
+
+function caseTexts(c) {
+  if (!c?.match) return [];
+  const m = c.match, u = c.urgency, it = c.internal_task, cl = c.understanding?.classification;
+  const out = [m.reason, ...(m.flags || []).map((f) => f.message), ...(c.warnings || []), cl?.reason, cl?.category, cl?.trade,
+    u?.reason, ...(u?.triggers || []), u?.response_target, ...(u?.safety_instructions || []),
+    it?.title, ...(it?.checklist || []), it?.assignee_role, ...(c.staff_options || []).map((o) => o.label),
+    ...(c.prior_cases || []).map((p) => p.reason), ...(c.prior_cases || []).map((p) => p.title)];
+  for (const k of m.candidates || []) out.push(...k.signals.map((s) => s.reason), ...k.vetoes);
+  return out.filter(Boolean);
+}
+
+async function ensureTx(texts) {
+  if (state.lang === "de") return false;
+  const missing = [...new Set(texts)].filter((x) => !state.tx.has(x));
+  if (!missing.length) return false;
+  try {
+    const { translations } = await api("/api/translate", { texts: missing });
+    for (const [k, v] of Object.entries(translations)) state.tx.set(k, v);
+  } catch { for (const k of missing) state.tx.set(k, null); }
+  return true;
+}
+
+function applyStatic() {
+  document.documentElement.lang = state.lang === "de" ? "de" : "en";
+  $$("[data-t]").forEach((el) => { el.textContent = t(el.dataset.t); });
+  $("#lang").value = state.lang;
+  document.title = `${t("brand")} · ${t("brandSub")}`;
+}
+
+const STATUS = () => ({
+  READY_FOR_APPROVAL: { label: t("stReady"), long: t("stReadyLong"), icon: "ready" },
+  NEEDS_REVIEW: { label: t("stReview"), long: t("stReviewLong"), icon: "review" },
+  OUT_OF_SCOPE: { label: t("stOut"), long: t("stOutLong"), icon: "route" },
+});
+const URG = (lv) => (state.lang === "de" ? lv : { NOTFALL: "EMERGENCY", DRINGEND: "URGENT", NORMAL: "NORMAL" }[lv] || lv);
+const URG_RANK = { NOTFALL: 0, DRINGEND: 1, NORMAL: 2 };
+const SIG = (n) => t({ name: "sigName", address: "sigAddress", floor: "sigFloor", side: "sigSide", contact: "sigContact" }[n]);
+const RES = (r) => t({ match: "rMatch", partial: "rPartial", missing: "rMissing", mismatch: "rMismatch" }[r]);
+function readerLabel(p) {
+  const name = { offline: t("rOffline"), groq: t("rGroq"), "recorded(groq)": t("rRecorded"), "groq→offline": t("rFallback") }[p.provider] || p.provider;
+  return p.model ? `${name} · ${p.model}` : name;
+}
+const providerLabel = () => ({ offline: t("provOffline"), recorded: t("provRecorded"), groq: t("provGroq") }[state.provider]);
 
 async function api(path, body, method) {
   const res = await fetch(path, {
@@ -50,7 +102,7 @@ async function api(path, body, method) {
   try { data = text ? JSON.parse(text) : null; } catch { data = { detail: text }; }
   if (!res.ok) {
     const msg = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail ?? data);
-    const err = new Error(msg || `Fehler ${res.status}`);
+    const err = new Error(msg || `HTTP ${res.status}`);
     err.status = res.status;
     throw err;
   }
@@ -58,11 +110,11 @@ async function api(path, body, method) {
 }
 
 function toast(msg) {
-  const t = $("#toast");
-  t.textContent = msg;
-  t.hidden = false;
-  clearTimeout(toast.t);
-  toast.t = setTimeout(() => (t.hidden = true), 3200);
+  const el = $("#toast");
+  el.textContent = msg;
+  el.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => (el.hidden = true), 3200);
 }
 
 /* ------------------------------------------------------------------ inbox */
@@ -70,15 +122,15 @@ function toast(msg) {
 function urgencyOf(c) { return c?.urgency?.level || null; }
 
 function mailRow({ key, subject, sender, status, urgency, idText, current, pending }) {
-  if (pending) return `<li><div class="mail skeleton" aria-label="wird gelesen"></div></li>`;
-  const s = STATUS[status];
+  if (pending) return `<li><div class="mail skeleton" aria-label="${esc(t("reading"))}"></div></li>`;
+  const s = STATUS()[status];
   return `<li><button class="mail ${urgency ? "u-" + urgency : ""}" data-key="${esc(key)}" aria-current="${current}">
-      <span class="mail-subject">${esc(subject || "(ohne Betreff)")}</span>
+      <span class="mail-subject">${esc(subject || t("noSubject"))}</span>
       <span class="mail-id">${esc(idText)}</span>
       <span class="mail-meta">
-        ${urgency === "NOTFALL" ? `<span class="chip u-NOTFALL">${icon("alert")}NOTFALL</span>` : ""}
-        ${s ? `<span class="chip s-${status}">${icon(s.icon)}${s.label}</span>` : `<span class="chip s-OUT_OF_SCOPE">noch nicht gelesen</span>`}
-        <span class="who">${esc(sender || "Absender unbekannt")}</span>
+        ${urgency === "NOTFALL" ? `<span class="chip u-NOTFALL">${icon("alert")}${URG("NOTFALL")}</span>` : ""}
+        ${s ? `<span class="chip s-${status}">${icon(s.icon)}${esc(s.label)}</span>` : `<span class="chip s-OUT_OF_SCOPE">${esc(t("notRead"))}</span>`}
+        <span class="who">${esc(sender || t("senderUnknown"))}</span>
       </span>
     </button></li>`;
 }
@@ -87,7 +139,7 @@ function renderInbox() {
   const list = $("#inbox-list");
   const cur = state.current;
   if (state.source === "demo") {
-    $("#inbox-note").textContent = "14 Beispiel-E-Mails mit erwartetem Ergebnis. Dringendes steht oben.";
+    $("#inbox-note").textContent = t("inboxDemoNote");
     const rows = state.scenarios.map((sc, i) => ({ sc, i, c: state.results.get(sc.id) }));
     rows.sort((a, b) => (URG_RANK[urgencyOf(a.c)] ?? 3) - (URG_RANK[urgencyOf(b.c)] ?? 3) || a.i - b.i);
     list.innerHTML = rows.map(({ sc, c }) => mailRow({
@@ -97,11 +149,9 @@ function renderInbox() {
       pending: c === undefined && state.provider !== "groq",
     })).join("");
   } else {
-    $("#inbox-note").textContent = state.store.length
-      ? "Vorgänge, die der n8n-Workflow (oder diese Oberfläche) zur Prüfung abgelegt hat."
-      : "";
+    $("#inbox-note").textContent = state.store.length ? t("inboxStoreNote") : "";
     if (!state.store.length) {
-      list.innerHTML = `<li class="empty-state"><h3>Prüfliste ist leer</h3><p>Hier landen E-Mails aus dem n8n-Workflow. Freigaben legen Vorgänge ebenfalls hier ab.</p></li>`;
+      list.innerHTML = `<li class="empty-state"><h3>${esc(t("storeEmptyH"))}</h3><p>${esc(t("storeEmptyP"))}</p></li>`;
       return;
     }
     const rows = [...state.store].sort((a, b) => (URG_RANK[a.urgency] ?? 3) - (URG_RANK[b.urgency] ?? 3) || String(b.received_at).localeCompare(String(a.received_at)));
@@ -120,7 +170,7 @@ async function loadScenarios() {
   await Promise.all(state.scenarios.map(async (sc) => {
     try {
       state.results.set(sc.id, await api("/api/process", { email: sc.email, scenario_id: sc.id, provider: state.provider }));
-    } catch (e) { state.results.set(sc.id, null); }
+    } catch { state.results.set(sc.id, null); }
     renderInbox();
   }));
 }
@@ -152,17 +202,13 @@ function highlight(body, ext) {
   return out + esc(body.slice(pos));
 }
 
-function field(label, value, extra = "", wide = false) {
-  const empty = value == null || value === "";
-  return `<div class="field${wide ? " wide" : ""}"><span class="label">${label}</span>
-    <span class="v${empty ? " empty" : ""}">${empty ? "nicht genannt" : esc(value)}${extra}</span></div>`;
+function field(label, valueHtml, extra = "", wide = false) {
+  const empty = valueHtml == null || valueHtml === "";
+  return `<div class="field${wide ? " wide" : ""}"><span class="label">${esc(label)}</span>
+    <span class="v${empty ? " empty" : ""}">${empty ? esc(t("notGiven")) : valueHtml}${extra}</span></div>`;
 }
 
-function floorText(loc) {
-  if (!loc) return "";
-  if (loc.floor == null) return "";
-  return loc.floor === 0 ? "EG" : `${loc.floor}. OG`;
-}
+const floorName = (f) => (f === 0 ? t("gfloor") : t("ogFloor", f));
 
 function effectiveRules(sc) {
   const base = state.rules?.parsed?.match || {};
@@ -173,12 +219,12 @@ function effectiveRules(sc) {
 function expectationCheck(sc, c) {
   if (!sc?.expected || !c) return null;
   const e = sc.expected, misses = [];
-  if (e.status && e.status !== c.status) misses.push("Status");
-  if ("contract" in e && (e.contract ?? null) !== (c.match?.selected_contract ?? null)) misses.push("Vertrag");
-  if (e.urgency && e.urgency !== c.urgency?.level) misses.push("Dringlichkeit");
+  if (e.status && e.status !== c.status) misses.push(t("mStatus"));
+  if ("contract" in e && (e.contract ?? null) !== (c.match?.selected_contract ?? null)) misses.push(t("mContract"));
+  if (e.urgency && e.urgency !== c.urgency?.level) misses.push(t("mUrgency"));
   if (e.failed_gates) {
     const a = [...(c.match?.failed_gates || [])].sort().join(","), b = [...e.failed_gates].sort().join(",");
-    if (a !== b) misses.push("Prüfregeln");
+    if (a !== b) misses.push(t("mGates"));
   }
   return misses;
 }
@@ -187,35 +233,37 @@ function stepsIndex(c) {
   const m = c.match, u = c.urgency, cl = c.understanding?.classification;
   const stop = c.status === "NEEDS_REVIEW";
   const items = [
-    ["s-input", "Eingang", c.input.sender_email || "Absender unbekannt", "done"],
-    ["s-read", "Erkannt", cl ? `${cl.category || cl.type}` : "–", "done"],
-    ["s-match", "Zuordnung", m?.selected_contract || (c.status === "OUT_OF_SCOPE" ? "nicht nötig" : "offen – Prüfung"), m?.selected_contract || c.status === "OUT_OF_SCOPE" ? "done" : "stop"],
-    ["s-prior", "Frühere Vorgänge", c.prior_cases?.length ? `${c.prior_cases.filter((p) => p.related).length} verwandt` : "keine", "done"],
-    ["s-urgency", "Dringlichkeit", u?.level || "–", u?.level === "NOTFALL" ? "alarm" : "done"],
-    ["s-carbon", "Antwort & Aufgabe", "Entwurf, nicht gesendet", stop ? "stop" : "done"],
+    ["s-input", t("step1"), esc(c.input.sender_email || t("senderUnknown")), "done"],
+    ["s-read", t("step2"), cl ? X(cl.category || cl.type) : "–", "done"],
+    ["s-match", t("step3"), esc(m?.approved_contract || m?.selected_contract || (c.status === "OUT_OF_SCOPE" ? t("notNeeded") : t("openReview"))),
+      m?.selected_contract || m?.approved_contract || c.status === "OUT_OF_SCOPE" ? "done" : "stop"],
+    ["s-prior", t("step4"), esc(c.prior_cases?.length ? t("relatedN", c.prior_cases.filter((p) => p.related).length) : t("none")), "done"],
+    ["s-urgency", t("step5"), esc(u ? URG(u.level) : "–"), u?.level === "NOTFALL" ? "alarm" : "done"],
+    ["s-carbon", t("step6"), esc(t("draftNotSent")), stop ? "stop" : "done"],
   ];
-  return `<ol class="steps" aria-label="Ablauf dieses Vorgangs">${items.map(([id, name, out, st]) =>
-    `<li class="${st}"><a href="#${id}"><span class="step-name">${name}</span><span class="step-out">${esc(out)}</span></a></li>`).join("")}</ol>`;
+  return `<ol class="steps" aria-label="${esc(t("stepsAria"))}">${items.map(([id, name, out, st]) =>
+    `<li class="${st}"><a href="#${id}"><span class="step-name">${esc(name)}</span><span class="step-out">${out}</span></a></li>`).join("")}</ol>`;
 }
 
 function verdict(c) {
-  const s = STATUS[c.status] || STATUS.NEEDS_REVIEW;
+  const s = STATUS()[c.status] || STATUS().NEEDS_REVIEW;
   const m = c.match;
-  let line = m?.reason || "";
-  if (c.status === "READY_FOR_APPROVAL") line = `Alle Prüfungen bestanden: ${m.selected_contract}, ${num(m.score)} Punkte, Abstand ${num(m.margin)}. Nichts passiert ohne Ihre Freigabe.`;
-  if (c.status === "NEEDS_REVIEW") line = (m.flags || []).map((f) => f.message).join(" · ");
-  if (m?.approved_contract) line = `Von einem Menschen freigegeben: ${m.approved_contract}. ` + line;
+  let line = X(m?.reason || "");
+  if (c.status === "READY_FOR_APPROVAL") line = esc(t("allPassed", m.selected_contract, num(m.score), num(m.margin)));
+  if (c.status === "NEEDS_REVIEW") line = (m.flags || []).map((f) => X(f.message)).join(" · ");
+  if (m?.approved_contract) line = esc(t("humanApproved", m.approved_contract)) + line;
   const u = c.urgency;
   return `<div class="verdict s-${c.status}${u?.level === "NOTFALL" ? " emergency" : ""}">
     <svg class="verdict-icon" aria-hidden="true"><use href="#i-${s.icon}"/></svg>
-    <div class="verdict-text"><h3>${s.long}</h3><p>${esc(line)}</p></div>
-    <div class="verdict-urgency">${u ? `<span class="chip u-${u.level}">${u.level === "NOTFALL" ? icon("alert") : ""}${u.level}</span><span>${esc(u.response_target)}</span>` : ""}</div>
+    <div class="verdict-text"><h3>${esc(s.long)}</h3><p>${line}</p></div>
+    <div class="verdict-urgency">${u ? `<span class="chip u-${u.level}">${u.level === "NOTFALL" ? icon("alert") : ""}${URG(u.level)}</span><span>${X(u.response_target)}</span>` : ""}</div>
   </div>`;
 }
 
 function sigCell(sig) {
-  return `<td class="sig"><span class="sig-mark sig-${sig.result}" title="${esc(SIG_LABEL[sig.name])}: ${esc(sig.reason)}">
-    <svg role="img" aria-label="${esc(SIG_LABEL[sig.name])} ${SIG_TEXT[sig.result]}"><use href="#i-${sig.result}"/></svg></span></td>`;
+  const label = `${SIG(sig.name)}: ${state.lang === "de" ? sig.reason : state.tx.get(sig.reason) || sig.reason}`;
+  return `<td class="sig"><span class="sig-mark sig-${sig.result}" title="${esc(label)}">
+    <svg role="img" aria-label="${esc(SIG(sig.name))} ${esc(RES(sig.result))}"><use href="#i-${sig.result}"/></svg></span></td>`;
 }
 
 function clearWinner(m) {
@@ -225,27 +273,28 @@ function clearWinner(m) {
 
 function candidatesTable(c) {
   const m = c.match, win = clearWinner(m);
-  if (!m?.candidates?.length) return `<p class="err">Kein passender Vertrag im ERP gefunden.</p>`;
+  if (!m?.candidates?.length) return `<p class="err">${esc(t("noContract"))}</p>`;
   const order = ["name", "address", "floor", "side", "contact"];
   const rows = m.candidates.map((cand) => {
     const sigs = order.map((n) => cand.signals.find((s) => s.name === n));
     const cls = ["cand", cand.contract_id === win ? "winner" : "", cand.vetoes.length ? "vetoed" : ""].join(" ");
-    const reasons = [...cand.vetoes.map((v) => `<span class="veto">Veto: ${esc(v)}</span>`),
-      ...sigs.filter((s) => s.result === "partial" || (s.result === "missing" && s.name !== "contact") || (s.result === "mismatch" && !["address", "floor", "side"].includes(s.name))).map((s) => `${esc(SIG_LABEL[s.name])}: ${esc(s.reason)}`)];
+    const reasons = [...cand.vetoes.map((v) => `<span class="veto">Veto: ${X(v)}</span>`),
+      ...sigs.filter((s) => s.result === "partial" || (s.result === "missing" && s.name !== "contact") || (s.result === "mismatch" && !["address", "floor", "side"].includes(s.name)))
+        .map((s) => `${esc(SIG(s.name))}: ${X(s.reason)}`)];
     return `<tr class="${cls}" data-unit="${esc(cand.unit_id)}">
-      <td><span class="cid">${esc(cand.contract_id)}</span> ${cand.active ? "" : `<span class="inactive-tag">inaktiv</span>`}
+      <td><span class="cid">${esc(cand.contract_id)}</span> ${cand.active ? "" : `<span class="inactive-tag">${esc(t("inactive"))}</span>`}
         <span class="unit">${esc(cand.tenant_name)} · ${esc(cand.unit_label)}</span>
-        ${reasons.length ? `<div class="why">${reasons.join("<br>")}</div>` : `<div class="why">Alle Merkmale passen.</div>`}</td>
+        <div class="why">${reasons.length ? reasons.join("<br>") : esc(t("allFit"))}</div></td>
       ${sigs.map(sigCell).join("")}
       <td class="score">${num(cand.score)}</td>
     </tr>`;
   }).join("");
-  return `<table class="cands"><thead><tr><th>Vertrag</th>${order.map((n) => `<th class="sig">${SIG_LABEL[n]}</th>`).join("")}<th>Punkte</th></tr></thead><tbody>${rows}</tbody></table>
+  return `<table class="cands"><thead><tr><th>${esc(t("contract"))}</th>${order.map((n) => `<th class="sig">${esc(SIG(n))}</th>`).join("")}<th>${esc(t("points"))}</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="legend">
-      <span><span class="sig-mark sig-match"><svg><use href="#i-match"/></svg></span>passt</span>
-      <span><span class="sig-mark sig-partial"><svg><use href="#i-partial"/></svg></span>teilweise (halbe Punkte)</span>
-      <span><span class="sig-mark sig-missing"><svg><use href="#i-missing"/></svg></span>fehlt (0, kein Widerspruch)</span>
-      <span><span class="sig-mark sig-mismatch"><svg><use href="#i-mismatch"/></svg></span>widerspricht (Veto)</span>
+      <span><span class="sig-mark sig-match"><svg><use href="#i-match"/></svg></span>${esc(t("legMatch"))}</span>
+      <span><span class="sig-mark sig-partial"><svg><use href="#i-partial"/></svg></span>${esc(t("legPartial"))}</span>
+      <span><span class="sig-mark sig-missing"><svg><use href="#i-missing"/></svg></span>${esc(t("legMissing"))}</span>
+      <span><span class="sig-mark sig-mismatch"><svg><use href="#i-mismatch"/></svg></span>${esc(t("legMismatch"))}</span>
     </div>`;
 }
 
@@ -261,68 +310,68 @@ function houseGrid(c) {
   const inHouse = m.candidates.filter((x) => x.object_id === objectId);
   const units = inHouse.map((x) => ({ ...x, pos: parseUnit(x.unit_id) })).filter((x) => x.pos);
   const loc = m.location || {};
-  const erpMax = Math.min(30, Math.max(3, ...units.map((u) => u.pos.floor)));
-  const maxF = erpMax, sides = units.some((u) => u.pos.side === "M") ? ["L", "M", "R"] : ["L", "R"];
-  const sideName = { L: "links", M: "Mitte", R: "rechts" };
+  const maxF = Math.min(30, Math.max(3, ...units.map((u) => u.pos.floor)));
+  const sides = units.some((u) => u.pos.side === "M") ? ["L", "M", "R"] : ["L", "R"];
+  const sideName = { L: t("left"), M: t("centre"), R: t("right") };
   const addr = inHouse[0]?.unit_label?.split(",")[0] || objectId;
-  let cells = `<span></span>${sides.map((s) => `<span class="colh">${sideName[s]}</span>`).join("")}`;
+  let cells = `<span></span>${sides.map((s) => `<span class="colh">${esc(sideName[s])}</span>`).join("")}`;
   for (let f = maxF; f >= 0; f--) {
-    cells += `<span class="fl">${f === 0 ? "EG" : f + ". OG"}</span>`;
+    cells += `<span class="fl">${esc(floorName(f))}</span>`;
     for (const s of sides) {
       const here = units.filter((u) => u.pos.floor === f && u.pos.side === s);
       const said = m.object_id === objectId && Number.isInteger(loc.floor) && loc.floor === f && (loc.side == null || loc.side === s);
-      const saidTag = said ? `<span class="said" title="Laut E-Mail">E-Mail</span>` : "";
+      const saidTag = said ? `<span class="said" title="${esc(t("perEmail"))}">${esc(t("emailTag"))}</span>` : "";
       if (!here.length) { cells += `<div class="unit-cell empty">${saidTag}</div>`; continue; }
       const u = here[0];
       const cls = ["unit-cell", "cand", u.contract_id === win ? "winner" : "", u.vetoes.length ? "vetoed" : "", u.active ? "" : "inactive"].join(" ");
       cells += `<div class="${cls}" data-unit="${esc(u.unit_id)}">${saidTag}<span class="uc-id">${esc(u.contract_id)}</span>${esc(u.tenant_name)}</div>`;
     }
   }
-  return `<div class="house" aria-label="Hausraster ${esc(addr)}"><div class="house-title">${esc(addr)}</div>
-    <div class="house-sub">Kandidaten im Haus. Schraffiert = ausgeschlossen, durchgestrichen = Vertrag inaktiv.</div>
+  return `<div class="house" aria-label="${esc(addr)}"><div class="house-title">${esc(addr)}</div>
+    <div class="house-sub">${esc(t("houseSub"))}</div>
     <div class="house-grid" style="--cols:${sides.length}">${cells}</div></div>`;
 }
 
 function gatesPanel(c, sc) {
   const m = c.match, failed = new Set(m.failed_gates || []);
-  if (c.status === "OUT_OF_SCOPE") return `<p class="reader-note">Keine Schadenmeldung – die Zuordnung dient nur der Weiterleitung, es wird keine Aktion am Vertrag vorbereitet.</p>`;
+  if (c.status === "OUT_OF_SCOPE") return `<p class="reader-note">${esc(t("outNote"))}</p>`;
   const r = effectiveRules(sc);
   const vetoFailed = failed.has("veto_address") || failed.has("veto_unit") || failed.has("no_candidate");
   const vetoCount = (m.candidates || []).filter((x) => x.vetoes.length).length;
-  const vetoText = vetoCount === 0 ? "keine Widersprüche" : vetoCount === 1 ? "1 Vertrag wegen Widerspruch ausgeschlossen" : `${vetoCount} Verträge wegen Widerspruch ausgeschlossen`;
+  const vetoText = vetoCount === 0 ? t("vetoNone") : vetoCount === 1 ? t("veto1") : t("vetoN", vetoCount);
+  const unitOpen = failed.has("threshold") || failed.has("margin") || m.winner == null;
   const g = [
-    ["Widersprüche", vetoFailed ? "fail" : "pass", vetoFailed ? "Der passendste Vertrag widerspricht der E-Mail" : vetoText],
-    ["Schwelle", m.winner == null ? "skip" : failed.has("threshold") ? "fail" : "pass", m.winner == null ? "kein Kandidat übrig" : `${num(m.score)} ${failed.has("threshold") ? "<" : "≥"} ${num(r.threshold)}`],
-    ["Abstand", m.winner == null ? "skip" : failed.has("margin") ? "fail" : "pass", m.winner == null ? "–" : `${num(m.margin)} ${failed.has("margin") ? "<" : "≥"} ${num(r.min_margin)}`],
-    ["Vertrag aktiv", failed.has("eligibility") ? "fail" : (failed.has("threshold") || failed.has("margin") || m.winner == null) ? "skip" : "pass",
-      failed.has("eligibility") ? "Vertrag beendet – kein Ausweichen" : (failed.has("threshold") || failed.has("margin") || m.winner == null) ? "erst nach eindeutiger Einheit" : "aktiv"],
+    [t("gVeto"), vetoFailed ? "fail" : "pass", vetoFailed ? t("vetoTop") : vetoText],
+    [t("gThreshold"), m.winner == null ? "skip" : failed.has("threshold") ? "fail" : "pass", m.winner == null ? t("noCand") : `${num(m.score)} ${failed.has("threshold") ? "<" : "≥"} ${num(r.threshold)}`],
+    [t("gMargin"), m.winner == null ? "skip" : failed.has("margin") ? "fail" : "pass", m.winner == null ? "–" : `${num(m.margin)} ${failed.has("margin") ? "<" : "≥"} ${num(r.min_margin)}`],
+    [t("gActive"), failed.has("eligibility") ? "fail" : unitOpen ? "skip" : "pass", failed.has("eligibility") ? t("ended") : unitOpen ? t("afterUnit") : t("active")],
   ];
   const ico = { pass: "match", fail: "mismatch", skip: "missing" };
-  const otherFlags = (m.flags || []).filter((f) => ["identity", "floor_missing", "floor_ambiguous"].includes(f.gate));
-  return `<ul class="gates" aria-label="Prüfregeln">${g.map(([n, st, v]) =>
-      `<li class="gate ${st}"><span class="g-name">${icon(ico[st])}${n}</span><span class="g-val">${esc(v)}</span></li>`).join("")}</ul>
-    ${otherFlags.length ? `<div class="flags">${otherFlags.map((f) => `<div class="flag">${icon("review")}<span>${esc(f.message)}</span></div>`).join("")}</div>` : ""}
-    ${c.match.unknown_sender ? `<div class="flags"><div class="flag">${icon("review")}<span>Nicht von der registrierten E-Mail-Adresse – siehe Optionen unten.</span></div></div>` : ""}`;
+  const otherFlags = (m.flags || []).filter((f) => ["identity", "floor_missing", "floor_ambiguous", "unit_ambiguous"].includes(f.gate));
+  return `<ul class="gates" aria-label="${esc(t("gatesAria"))}">${g.map(([n, st, v]) =>
+      `<li class="gate ${st}"><span class="g-name">${icon(ico[st])}${esc(n)}</span><span class="g-val">${esc(v)}</span></li>`).join("")}</ul>
+    ${otherFlags.length ? `<div class="flags">${otherFlags.map((f) => `<div class="flag">${icon("review")}<span>${X(f.message)}</span></div>`).join("")}</div>` : ""}
+    ${c.match.unknown_sender ? `<div class="flags"><div class="flag">${icon("review")}<span>${esc(t("unknownSenderFlag"))}</span></div></div>` : ""}`;
 }
 
 function priorPanel(c) {
-  if (!c.prior_cases?.length) return `<p class="reader-note">Keine früheren Vorgänge für ${esc(c.match?.approved_contract || c.match?.selected_contract || c.match?.winner || "die Kandidaten")}.</p>`;
+  if (!c.prior_cases?.length) return `<p class="reader-note">${esc(t("noPrior", c.match?.approved_contract || c.match?.selected_contract || c.match?.winner || t("theCands")))}</p>`;
   return `<ul class="prior">${c.prior_cases.map((p) => `<li class="${p.related ? "related" : ""}">
-      <span class="p-id">${esc(p.case_id)}</span><span class="p-title">${esc(p.title)} · ${p.state === "closed" ? "abgeschlossen" : "offen"}${p.possible_duplicate ? " · mögliche Doppelmeldung" : ""}</span>
-      <span class="p-why">${esc(p.contract_id)} · ${esc(p.reason)}${p.contractor ? ` · damals: ${esc(p.contractor)}` : ""}</span></li>`).join("")}</ul>
-    <p class="internal-note">Nur intern: frühere Vorgänge erscheinen nie in der Antwort an den Mieter.</p>`;
+      <span class="p-id">${esc(p.case_id)}</span><span class="p-title">${X(p.title)} · ${esc(p.state === "closed" ? t("closed") : t("open"))}${p.possible_duplicate ? " · " + esc(t("dup")) : ""}</span>
+      <span class="p-why">${esc(p.contract_id)} · ${X(p.reason)}${p.contractor ? ` · ${esc(t("then"))}: ${esc(p.contractor)}` : ""}</span></li>`).join("")}</ul>
+    <p class="internal-note">${esc(t("internalOnly"))}</p>`;
 }
 
 function urgencyPanel(c) {
   const u = c.urgency;
   if (!u) return "";
-  return `<div class="urgency-big"><span class="lvl ${u.level}">${u.level}</span><span>${esc(u.response_target)}</span></div>
+  return `<div class="urgency-big"><span class="lvl ${u.level}">${URG(u.level)}</span><span>${X(u.response_target)}</span></div>
     <dl class="urgency-rows">
-      <dt>Regel-Untergrenze</dt><dd>${u.rule_level}${u.triggers.length ? ` – ${esc(u.triggers.join(", "))}` : " – keine Regel getroffen"}</dd>
-      <dt>KI-Hinweis</dt><dd>${u.llm_level ? `${u.llm_level} – die strengere Stufe gewinnt` : "keiner (Regelmodus)"}</dd>
-      <dt>„dringend“ im Text</dt><dd>${u.tenant_says_urgent ? "ja – notiert, erhöht aber nicht" : "nein"}</dd>
+      <dt>${esc(t("ruleFloor"))}</dt><dd>${URG(u.rule_level)}${u.triggers.length ? ` – ${u.triggers.map((x) => X(x)).join(", ")}` : ` – ${esc(t("noRule"))}`}</dd>
+      <dt>${esc(t("aiHint"))}</dt><dd>${u.llm_level ? `${URG(u.llm_level)} – ${esc(t("strictWins"))}` : esc(t("noHint"))}</dd>
+      <dt>${esc(t("urgentWord"))}</dt><dd>${esc(u.tenant_says_urgent ? t("urgentYes") : t("no"))}</dd>
     </dl>
-    ${u.safety_instructions?.length ? `<ol class="safety">${u.safety_instructions.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}`;
+    ${u.safety_instructions?.length ? `<ol class="safety">${u.safety_instructions.map((s) => `<li>${X(s)}</li>`).join("")}</ol>` : ""}`;
 }
 
 function approvals(c) {
@@ -344,32 +393,36 @@ function approvals(c) {
 
 function stampHtml(a, fresh) {
   if (!a) return "";
-  return `<div class="stamp${fresh ? " fresh" : ""}"><b>Freigegeben</b><span>${esc(a.details?.contract_id || "")} · ${esc(a.actor)} · ${clock(a.ts)}</span></div>`;
+  return `<div class="stamp${fresh ? " fresh" : ""}"><b>${esc(t("approved"))}</b><span>${esc(a.details?.contract_id || "")} · ${esc(a.actor)} · ${clock(a.ts)}</span></div>`;
 }
+
+const actionName = (ev) => ui().actions[ev] || ev;
 
 function carbon(c, opts = {}) {
   const ap = approvals(c);
   const stamp = stampHtml(ap.assignment, opts.freshStamp);
-  const r = c.reply_draft, t = c.internal_task;
+  const r = c.reply_draft, tk = c.internal_task;
+  const scope = { contract: t("lvContract"), object: t("lvObject"), routing: t("lvRouting"), clarification: t("lvClar") };
   const sheets = {
-    reply: `<div class="sheet-meta"><span class="label">An</span><span>${esc(r?.to || "Absender (Adresse nicht übermittelt)")}</span>
-        <span class="label">Betreff</span><span>${esc(r?.subject)}</span>
-        <span class="label">Sprache</span><span>${r?.language === "en" ? "Englisch (wie die E-Mail)" : "Deutsch"}</span></div>
-      <div class="letter">${esc(r?.body)}</div>
-      <p style="margin-top:.8rem"><span class="never-sent">${icon("mail")}Entwurf – wird nie automatisch gesendet${r?.variant === "ask_registered_email" ? " · Variante: registrierte Adresse erbitten" : ""}</span></p>`,
-    task: t ? `<div class="task-title">${esc(t.title)}</div>
-      <div class="task-head"><span class="chip u-${t.priority}">${t.priority}</span><span>an: ${esc(t.assignee_role)}</span><span>Frist: ${t.due_hours} Std.</span>
-        <span>Ebene: ${{ contract: "Vertrag", object: "Gebäude", routing: "Weiterleitung", clarification: "Klärung" }[t.scope]}</span>
-        ${t.contract_id ? `<span>Vertrag: ${esc(t.contract_id)}</span>` : ""}</div>
-      <ol class="checklist">${t.checklist.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : "",
-    file: `<div class="file-grid"><div><span class="label">Protokoll dieses Vorgangs</span>
-        <ul class="audit-mini">${(c.audit || []).slice(-12).map((a) => `<li><time>${clock(a.ts)}</time><span><b>${esc(a.actor)}</b> · ${esc(a.event)}${a.details?.contract_id ? " · " + esc(a.details.contract_id) : ""}${a.details?.simulated ? " · simuliert" : ""}</span></li>`).join("")}</ul></div>
-      <div><span class="label">Strukturierter Datensatz (JSON)</span><pre class="json">${esc(JSON.stringify(c, null, 2))}</pre></div></div>`,
+    reply: `<div class="sheet-meta"><span class="label">${esc(t("to"))}</span><span>${esc(r?.to || t("toUnknown"))}</span>
+        <span class="label">${esc(t("subject"))}</span><span>${esc(r?.subject)}</span>
+        <span class="label">${esc(t("language"))}</span><span>${esc(r?.language === "en" ? t("langEnEmail") : t("langDe"))}</span></div>
+      <div class="letter" lang="${esc(r?.language || "de")}">${esc(r?.body)}</div>
+      <p style="margin-top:.8rem"><span class="never-sent">${icon("mail")}${esc(t("neverSent"))}${r?.variant === "ask_registered_email" ? esc(t("variantReg")) : ""}</span>
+      ${state.lang !== "de" ? `<span class="never-sent" style="margin-left:.4rem">${esc(t("replyLangNote"))}</span>` : ""}</p>`,
+    task: tk ? `<div class="task-title">${X(tk.title)}</div>
+      <div class="task-head"><span class="chip u-${tk.priority}">${URG(tk.priority)}</span><span>${esc(t("assignee"))}: ${X(tk.assignee_role)}</span><span>${esc(t("due"))}: ${tk.due_hours} ${esc(t("hours"))}</span>
+        <span>${esc(t("level"))}: ${esc(scope[tk.scope])}</span>
+        ${tk.contract_id ? `<span>${esc(t("contract"))}: ${esc(tk.contract_id)}</span>` : ""}</div>
+      <ol class="checklist">${tk.checklist.map((x) => `<li>${X(x)}</li>`).join("")}</ol>` : "",
+    file: `<div class="file-grid"><div><span class="label">${esc(t("caseLog"))}</span>
+        <ul class="audit-mini">${(c.audit || []).slice(-12).map((a) => `<li><time>${clock(a.ts)}</time><span><b>${esc(a.actor)}</b> · ${esc(actionName(a.event))}${a.details?.contract_id ? " · " + esc(a.details.contract_id) : ""}${a.details?.simulated ? " · " + esc(t("simulated")) : ""}</span></li>`).join("")}</ul></div>
+      <div><span class="label">${esc(t("record"))}</span><pre class="json">${esc(JSON.stringify(c, null, 2))}</pre></div></div>`,
   };
-  const tabs = [["reply", "Antwort an Mieter", "weiß · Entwurf"], ["task", "Interne Aufgabe", "gelb · Technik"], ["file", "Aktenvermerk", "rosa · Akte"]];
-  return `<section class="carbon" id="s-carbon" aria-label="Durchschreibesatz">
+  const tabs = [["reply", t("shReply"), t("shReplyW")], ["task", t("shTask"), t("shTaskW")], ["file", t("shFile"), t("shFileW")]];
+  return `<section class="carbon" id="s-carbon" aria-label="${esc(t("carbonAria"))}">
     <div class="carbon-tabs" role="tablist">${tabs.map(([k, n, w]) =>
-      `<button class="carbon-tab" role="tab" data-sheet="${k}" aria-selected="${state.sheet === k}">${n}<span class="who">${w}</span></button>`).join("")}</div>
+      `<button class="carbon-tab" role="tab" data-sheet="${k}" aria-selected="${state.sheet === k}">${esc(n)}<span class="who">${esc(w)}</span></button>`).join("")}</div>
     <div class="carbon-stack"><div class="carbon-sheet" data-sheet="${state.sheet}" role="tabpanel">${stamp}${sheets[state.sheet]}
       ${actionBar(c, ap)}</div></div>
   </section>`;
@@ -377,91 +430,99 @@ function carbon(c, opts = {}) {
 
 function actionBar(c, ap) {
   const m = c.match;
-  const actor = `<label class="label" style="display:flex;flex-direction:column;gap:.2rem">Bearbeitet von<input class="input" id="actor" value="${esc(state.actor)}" autocomplete="name"></label>`;
+  const actor = `<label class="label" style="display:flex;flex-direction:column;gap:.2rem">${esc(t("editedBy"))}<input class="input" id="actor" value="${esc(state.actor)}" autocomplete="name"></label>`;
   let left = "", right = "";
-  const replyBtn = `<button class="btn" data-act="approve_reply">${icon("copy")}Entwurf freigeben &amp; kopieren</button>`;
+  const replyBtn = `<button class="btn" data-act="approve_reply">${icon("copy")}${esc(t("approveCopy"))}</button>`;
   if (c.status === "OUT_OF_SCOPE") {
     left = `${actor}${replyBtn}`;
-    right = `<span class="hint">Keine Vertragsaktion: die Nachricht geht an ${esc(c.internal_task?.assignee_role || "die zuständige Stelle")}.</span>`;
+    right = `<span class="hint">${esc(t("noContractAction", "§")).replace("§", X(c.internal_task?.assignee_role || "") || esc(t("theRole")))}</span>`;
   } else if (ap.assignment) {
     left = `${actor}${replyBtn}`;
     right = ap.order
-      ? `<span class="hint">Handwerker beauftragt (simuliert) um ${clock(ap.order.ts)}.</span>`
-      : `<button class="btn primary" data-act="order_contractor">Handwerker beauftragen</button><span class="hint">Im Prototyp simuliert – kein Schreibzugriff aufs ERP.</span>`;
+      ? `<span class="hint">${esc(t("ordered", clock(ap.order.ts)))}</span>`
+      : `<button class="btn primary" data-act="order_contractor">${esc(t("order"))}</button><span class="hint">${esc(t("orderHint"))}</span>`;
   } else if (c.status === "READY_FOR_APPROVAL") {
     left = `${actor}${replyBtn}`;
-    right = `<button class="btn primary ${c.urgency?.level === "NOTFALL" ? "alarm" : ""}" data-act="approve_assignment" data-contract="${esc(m.selected_contract)}">Zuordnung ${esc(m.selected_contract)} freigeben</button>
-      <span class="hint">Erst nach Ihrer Freigabe darf etwas am Vertrag passieren.</span>`;
+    right = `<button class="btn primary ${c.urgency?.level === "NOTFALL" ? "alarm" : ""}" data-act="approve_assignment" data-contract="${esc(m.selected_contract)}">${esc(t("approveX", m.selected_contract))}</button>
+      <span class="hint">${esc(t("approveHint"))}</span>`;
   } else {
-    const opts = (m.candidates || []).map((x) => `<option value="${esc(x.contract_id)}" ${x.contract_id === m.winner ? "selected" : ""}>${esc(x.contract_id)} · ${esc(x.unit_label)}${x.vetoes.length ? " (widerspricht)" : ""}${x.active ? "" : " (inaktiv)"}</option>`).join("");
+    const opts = (m.candidates || []).map((x) => `<option value="${esc(x.contract_id)}" ${x.contract_id === m.winner ? "selected" : ""}>${esc(x.contract_id)} · ${esc(x.unit_label)}${x.vetoes.length ? esc(t("contradicts")) : ""}${x.active ? "" : esc(t("inactiveOpt"))}</option>`).join("");
     left = `<div class="manual">${actor}
-        <label class="label">Vertrag wählen<select class="input" id="manual-contract">${opts}</select></label>
-        <label class="label" style="grid-column:1/-1">Begründung (Pflicht)<textarea class="input" id="manual-reason" placeholder="z. B. Mieter hat telefonisch 2. OG links bestätigt"></textarea></label></div>`;
-    right = `${replyBtn}<button class="btn primary" data-act="approve_assignment" data-manual="1">Zuordnung manuell freigeben</button>
-      <span class="hint">Empfohlen: zuerst die Rückfrage an den Mieter senden.</span>`;
+        <label class="label">${esc(t("chooseContract"))}<select class="input" id="manual-contract">${opts}</select></label>
+        <label class="label" style="grid-column:1/-1">${esc(t("reasonReq"))}<textarea class="input" id="manual-reason" placeholder="${esc(t("reasonPh"))}"></textarea></label></div>`;
+    right = `${replyBtn}<button class="btn primary" data-act="approve_assignment" data-manual="1">${esc(t("approveManual"))}</button>
+      <span class="hint">${esc(t("askFirst"))}</span>`;
     if (c.urgency?.level === "NOTFALL" && m.object_id && !m.building_uncertain && !ap.object) {
-      right = `<button class="btn alarm primary" data-act="object_action">Notdienst zum Gebäude (simuliert)</button><span class="hint">Gebäude ist bekannt – das ist ohne Einheit erlaubt.</span>` + right;
+      right = `<button class="btn alarm primary" data-act="object_action">${esc(t("objectAction"))}</button><span class="hint">${esc(t("objectHint"))}</span>` + right;
     }
   }
-  const staff = c.staff_options?.length && c.status !== "OUT_OF_SCOPE" ? `<div class="staff"><h4>${icon("review")}Nicht von der registrierten E-Mail-Adresse – wie weiter?</h4>
+  const staff = c.staff_options?.length && c.status !== "OUT_OF_SCOPE" ? `<div class="staff"><h4>${icon("review")}${esc(t("staffH"))}</h4>
       <div class="opts">${c.staff_options.map((o) => `<button class="btn" data-act="staff" data-option="${o.code}" ${o.available ? "" : "disabled"}>
-        ${o.code === "call_tenant" ? icon("phone") : o.code === "ask_registered_email" ? icon("mail") : icon("ready")}${esc(o.label)}${o.detail ? ` · ${esc(o.detail)}` : ""}</button>`).join("")}</div>
-      ${ap.option ? `<span class="hint" style="text-align:left">Gewählt: ${esc(ap.option.details?.staff_option)} (${esc(ap.option.actor)}, ${clock(ap.option.ts)})</span>` : ""}</div>` : "";
+        ${o.code === "call_tenant" ? icon("phone") : o.code === "ask_registered_email" ? icon("mail") : icon("ready")}${X(o.label)}${o.detail ? ` · ${esc(o.detail)}` : ""}</button>`).join("")}</div>
+      ${ap.option ? `<span class="hint" style="text-align:left">${esc(t("chosen"))}: ${esc(ap.option.details?.staff_option)} (${esc(ap.option.actor)}, ${clock(ap.option.ts)})</span>` : ""}</div>` : "";
   return `<div class="actions"><div class="left">${left}</div><div class="right">${right}</div></div>${staff}<p class="err" id="act-err" role="alert"></p>`;
 }
 
 function renderCase(opts = {}) {
   const cur = state.current, view = $("#view-case");
   if (!cur) {
-    view.innerHTML = `<div class="case"><div class="empty-state"><h3>Eine E-Mail links auswählen</h3><p>Jede Nachricht wird in sechs Schritten gelesen, zugeordnet und eingestuft. Gehandelt wird erst nach Ihrer Freigabe.</p></div></div>`;
+    view.innerHTML = `<div class="case"><div class="empty-state"><h3>${esc(t("pickH"))}</h3><p>${esc(t("pickP"))}</p></div></div>`;
     return;
   }
   if (cur.loading) {
-    view.innerHTML = `<div class="case"><div class="verdict"><div class="verdict-text"><h3>E-Mail wird gelesen …</h3><p>${esc(PROVIDER_LABEL[state.provider])}</p></div></div><div class="sheet" style="height:320px"></div></div>`;
+    view.innerHTML = `<div class="case"><div class="verdict"><div class="verdict-text"><h3>${esc(t("readingH"))}</h3><p>${esc(providerLabel())}</p></div></div><div class="sheet" style="height:320px"></div></div>`;
     return;
   }
   if (cur.error) {
-    view.innerHTML = `<div class="case"><div class="empty-state"><h3>Konnte nicht verarbeitet werden</h3><p class="err">${esc(cur.error)}</p></div></div>`;
+    view.innerHTML = `<div class="case"><div class="empty-state"><h3>${esc(t("failedH"))}</h3><p class="err">${X(cur.error)}</p></div></div>`;
     return;
   }
-  const c = cur.case, sc = cur.scenario, ext = c.understanding.extraction, cl = c.understanding.classification, loc = c.match.location;
+  const c = cur.case;
+  // English: fetch translations of this case's system texts once, then render again
+  if (state.lang !== "de") {
+    const texts = caseTexts(c);
+    if (texts.some((x) => !state.tx.has(x))) { ensureTx(texts).then(() => { if (state.current?.case === c) renderCase(opts); }); }
+  }
+  const sc = cur.scenario, ext = c.understanding.extraction, cl = c.understanding.classification, loc = c.match.location;
   const misses = expectationCheck(sc, c);
-  const floorShow = ext.floor_raw ? `<small> → ${loc.floor_note ? esc(loc.floor_note.replace(/^'.*?' /, "").replace(/^=\s*/, "")) : floorText(loc)}</small>` : "";
+  const floorShow = ext.floor_raw ? `<small> → ${loc.floor != null ? esc(floorName(loc.floor)) : X(loc.floor_note || "")}</small>` : "";
+  const type = { SCHADENMELDUNG: t("tDamage"), ANFRAGE_MIETE: t("tRent") }[cl.type] || t("tOther");
+  const freeReason = !/^Regelmodus/.test(cl.reason || "");
   view.innerHTML = `<div class="case">
     <div class="case-head">
-      <h1 class="case-title">${esc(c.input.subject || "(ohne Betreff)")}</h1>
-      ${misses ? `<span class="expect ${misses.length ? "bad" : "ok"}">${icon(misses.length ? "mismatch" : "match")}${misses.length ? "Abweichung: " + misses.join(", ") : `Szenario ${esc(sc.id)}: Erwartung erfüllt`}</span>` : "<span></span>"}
-      <div class="case-facts"><span>Vorgang <b>${esc(c.case_id)}</b></span><span>Eingang <b>${time(c.received_at)}</b></span>
-        <span>Gelesen von <b>${esc(readerLabel(c.processing))}</b></span>
-        <span>Regelstand <b>${esc(c.processing.rules_version)}</b></span></div>
+      <h1 class="case-title">${esc(c.input.subject || t("noSubject"))}</h1>
+      ${misses ? `<span class="expect ${misses.length ? "bad" : "ok"}">${icon(misses.length ? "mismatch" : "match")}${esc(misses.length ? t("expectBad") + misses.join(", ") : t("expectOk", sc.id))}</span>` : "<span></span>"}
+      <div class="case-facts"><span>${esc(t("caseNo"))} <b>${esc(c.case_id)}</b></span><span>${esc(t("received"))} <b>${time(c.received_at)}</b></span>
+        <span>${esc(t("readBy"))} <b>${esc(readerLabel(c.processing))}</b></span>
+        <span>${esc(t("rulesVer"))} <b>${esc(c.processing.rules_version)}</b></span></div>
     </div>
     ${verdict(c)}
     ${stepsIndex(c)}
     <div class="grid-2">
-      <section class="sheet" id="s-input"><div class="sheet-head"><h3><span class="n">1</span>Eingang</h3><span class="aside">unterstrichen = vom Leser erkannt</span></div>
-        <div class="email"><div class="email-head"><span class="label">Von</span><span>${esc(c.input.sender_email || "unbekannt")}</span>
-          <span class="label">Betreff</span><span>${esc(c.input.subject)}</span></div>
-          <div class="email-body">${highlight(c.input.body, ext)}</div></div></section>
-      <section class="sheet" id="s-read"><div class="sheet-head"><h3><span class="n">2</span>Erkannt</h3><span class="aside">Sicherheit ${num(cl.confidence * 100, 0)} %</span></div>
+      <section class="sheet" id="s-input"><div class="sheet-head"><h3><span class="n">1</span>${esc(t("secInput"))}</h3><span class="aside">${esc(t("underlined"))}</span></div>
+        <div class="email"><div class="email-head"><span class="label">${esc(t("from"))}</span><span>${esc(c.input.sender_email || t("unknown"))}</span>
+          <span class="label">${esc(t("subject"))}</span><span>${esc(c.input.subject)}</span></div>
+          <div class="email-body" lang="${esc(ext.language)}">${highlight(c.input.body, ext)}</div></div></section>
+      <section class="sheet" id="s-read"><div class="sheet-head"><h3><span class="n">2</span>${esc(t("secRead"))}</h3><span class="aside">${esc(t("confidence"))} ${num(cl.confidence * 100, 0)} %</span></div>
         <div class="fields">
-          ${field("Art", cl.type === "SCHADENMELDUNG" ? "Schadenmeldung" : cl.type === "ANFRAGE_MIETE" ? "Anfrage zur Miete" : "Sonstiges")}
-          ${field("Schadenart · Gewerk", [cl.category, cl.trade].filter(Boolean).join(" · "))}
-          ${field("Vertragsinhaber laut Mail", ext.tenant_name)}${field("Absender", ext.sender_name)}
-          ${field("Adresse", [ext.street_raw, ext.house_no].filter(Boolean).join(" "))}
-          ${field("Etage", ext.floor_raw, floorShow)}${field("Seite", ext.side_raw)}${field("Raum", cap(ext.room))}
-          ${field("Seit", ext.since)}${field("Fotos", ext.photos_mentioned ? (c.input.attachments?.length ? "erwähnt, angehängt" : "erwähnt, nicht angehängt") : "nicht erwähnt")}
-          ${field("Beschreibung", ext.damage_description, "", true)}
+          ${field(t("fType"), esc(type))}
+          ${field(t("fCat"), [cl.category, cl.trade].filter(Boolean).map((x) => X(x)).join(" · "))}
+          ${field(t("fHolder"), ext.tenant_name && esc(ext.tenant_name))}${field(t("fSender"), ext.sender_name && esc(ext.sender_name))}
+          ${field(t("fAddress"), esc([ext.street_raw, ext.house_no].filter(Boolean).join(" ")))}
+          ${field(t("fFloor"), ext.floor_raw && esc(ext.floor_raw), floorShow)}${field(t("fSide"), ext.side_raw && esc(ext.side_raw))}${field(t("fRoom"), ext.room && X(cap(ext.room)))}
+          ${field(t("fSince"), ext.since && esc(ext.since))}${field(t("fPhotos"), esc(ext.photos_mentioned ? (c.input.attachments?.length ? t("photosAtt") : t("photosNot")) : t("photosNone")))}
+          ${field(t("fDesc"), ext.damage_description && esc(ext.damage_description), "", true)}
         </div>
-        <p class="reader-note"><b>Begründung:</b> ${esc(cl.reason)}${c.understanding.fallback_used ? ` <span class="err">· ${esc(c.understanding.warnings.join(" "))}</span>` : ""}</p>
+        <p class="reader-note"><b>${esc(t("reason"))}:</b> ${X(cl.reason, { free: freeReason })}${c.understanding.fallback_used ? ` <span class="err">· ${c.understanding.warnings.map((w) => X(w)).join(" ")}</span>` : ""}</p>
       </section>
     </div>
-    <section class="sheet" id="s-match"><div class="sheet-head"><h3><span class="n">3</span>Zuordnung im ERP</h3><span class="aside">feste Regeln – die KI wählt nie den Vertrag</span></div>
+    <section class="sheet" id="s-match"><div class="sheet-head"><h3><span class="n">3</span>${esc(t("secMatch"))}</h3><span class="aside">${esc(t("fixedRules"))}</span></div>
       <div class="match-layout"><div>${candidatesTable(c)}</div>${houseGrid(c)}</div>
       ${gatesPanel(c, sc)}
     </section>
     <div class="grid-2">
-      <section class="sheet" id="s-prior"><div class="sheet-head"><h3><span class="n">4</span>Frühere Vorgänge</h3></div>${priorPanel(c)}</section>
-      <section class="sheet" id="s-urgency"><div class="sheet-head"><h3><span class="n">5</span>Dringlichkeit</h3><span class="aside">Regeln setzen die Untergrenze</span></div>${urgencyPanel(c)}</section>
+      <section class="sheet" id="s-prior"><div class="sheet-head"><h3><span class="n">4</span>${esc(t("secPrior"))}</h3></div>${priorPanel(c)}</section>
+      <section class="sheet" id="s-urgency"><div class="sheet-head"><h3><span class="n">5</span>${esc(t("secUrgency"))}</h3><span class="aside">${esc(t("rulesMin"))}</span></div>${urgencyPanel(c)}</section>
     </div>
     ${carbon(c, opts)}
   </div>`;
@@ -497,7 +558,7 @@ async function adopt(cur, c) {
     x.staff_options, (x.audit || []).filter((e) => e.actor !== "system").length]);
   if (key(stored) !== key(c)) {
     cur.case = stored; renderCase();
-    const err = new Error("Der gespeicherte Vorgang weicht von dieser Ansicht ab (neu verarbeitet oder bereits bearbeitet). Die aktuelle Fassung wird angezeigt – bitte erneut prüfen.");
+    const err = new Error(t("staleMsg"));
     err.status = 409; throw err;
   }
   cur.case = stored;
@@ -519,35 +580,35 @@ async function act(btn) {
     if (kind === "approve_reply") {
       await adopt(cur, c);
       cur.case = await approve(cur, { action: "approve_reply" });
-      try { await navigator.clipboard.writeText(cur.case.reply_draft.body); toast("Entwurf freigegeben und kopiert – Versand bleibt bei Ihnen."); }
-      catch { toast("Entwurf freigegeben. Kopieren nicht erlaubt – bitte Text markieren."); }
+      try { await navigator.clipboard.writeText(cur.case.reply_draft.body); toast(t("toastCopied")); }
+      catch { toast(t("toastNoCopy")); }
       renderCase();
     } else if (kind === "approve_assignment") {
       const manual = btn.dataset.manual === "1";
       const contract = manual ? $("#manual-contract").value : btn.dataset.contract;
       const reason = manual ? $("#manual-reason").value.trim() : null;
-      if (manual && !reason) { errEl.textContent = "Bitte eine Begründung angeben – sie steht später im Protokoll."; $("#manual-reason").focus(); return; }
+      if (manual && !reason) { errEl.textContent = t("needReason"); $("#manual-reason").focus(); return; }
       await adopt(cur, c);
       cur.case = await approve(cur, { action: "approve_assignment", contract_id: contract, reason });
-      toast(`Zuordnung ${contract} freigegeben.`);
+      toast(t("toastAssigned", contract));
       renderCase({ freshStamp: true });
     } else if (kind === "order_contractor") {
       await adopt(cur, c);
       const a = approvals(cur.case).assignment;
       cur.case = await approve(cur, { action: "order_contractor", contract_id: cur.case.match.approved_contract, reason: a?.details?.reason });
-      toast("Handwerkerauftrag erfasst (simuliert).");
+      toast(t("toastOrdered"));
       renderCase();
     } else if (kind === "object_action") {
       await adopt(cur, c);
       cur.case = await approve(cur, { action: "object_action", reason: "Notfall im Gebäude" });
-      toast("Notdienst für das Gebäude erfasst (simuliert).");
+      toast(t("toastObject"));
       renderCase();
     } else if (kind === "staff") {
       const option = btn.dataset.option;
       await adopt(cur, c);
       cur.case = await approve(cur, { action: "choose_staff_option", option, reason: option });
       if (option !== "call_tenant") state.sheet = "reply";
-      toast(option === "call_tenant" ? "Anruf vorgemerkt." : "Option gewählt.");
+      toast(option === "call_tenant" ? t("toastCall") : t("toastOption"));
       renderCase();
     }
     loadStore();
@@ -558,12 +619,15 @@ async function act(btn) {
         cur.case = await api("/api/process", { email: c.input, scenario_id: c.processing?.scenario_id, provider: state.provider, store: true });
         if (cur.kind === "scenario") state.results.set(cur.id, cur.case);
         renderCase();
-        const el2 = $("#act-err"); if (el2) el2.textContent = "Die Regeln wurden geändert – der Vorgang wurde neu verarbeitet. Bitte erneut prüfen und freigeben.";
+        const el2 = $("#act-err"); if (el2) el2.textContent = t("rulesChanged");
         return;
       } catch { /* fall through to message */ }
     } else if (e.status === 409) { try { cur.case = await api(`/api/cases/${encodeURIComponent(c.case_id)}`); renderCase(); } catch { /* keep view */ } }
     const el = $("#act-err");
-    if (el) el.textContent = e.status === 403 ? `Nicht erlaubt: ${e.message}` : e.status === 409 ? e.message : `Fehler: ${e.message}`;
+    if (el) {
+      const msg = state.lang === "de" ? e.message : (state.tx.get(e.message) || e.message);
+      el.textContent = e.status === 403 ? t("notAllowed") + msg : e.status === 409 ? msg : t("error") + msg;
+    }
   } finally {
     btn.classList.remove("loading"); btn.disabled = false;
   }
@@ -602,13 +666,13 @@ function compose() {
   ++selection;
   switchView("case");
   state.current = null;
-  $("#view-case").innerHTML = `<div class="case"><h1 class="case-title">Eigene E-Mail prüfen</h1>
+  $("#view-case").innerHTML = `<div class="case"><h1 class="case-title">${esc(t("composeH"))}</h1>
     <form class="compose" id="compose">
-      <label class="label">Absender (optional)<input class="input" name="sender_email" type="email" placeholder="mieter@example.org"></label>
-      <label class="label">Betreff<input class="input" name="subject" required placeholder="Wasserschaden Küche"></label>
-      <label class="label">Text<textarea class="input" name="body" required placeholder="Hallo, seit gestern läuft Wasser …"></textarea></label>
-      <div><button class="btn primary" type="submit">E-Mail verarbeiten</button></div>
-      <p class="hint" style="text-align:left">Nur Testdaten verwenden – im Modus „Groq live“ geht der Text an einen US-Anbieter.</p>
+      <label class="label">${esc(t("senderOpt"))}<input class="input" name="sender_email" type="email" placeholder="mieter@example.org"></label>
+      <label class="label">${esc(t("subject"))}<input class="input" name="subject" required placeholder="${esc(t("subjectPh"))}"></label>
+      <label class="label">${esc(t("text"))}<textarea class="input" name="body" required placeholder="${esc(t("bodyPh"))}"></textarea></label>
+      <div><button class="btn primary" type="submit">${esc(t("process"))}</button></div>
+      <p class="hint" style="text-align:left">${esc(t("composeNote"))}</p>
     </form></div>`;
   $("#compose").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -635,30 +699,31 @@ function yamlHtml(text) {
 
 async function renderRules() {
   const v = $("#view-rules");
-  v.innerHTML = `<div class="page"><h2>Regeln</h2><div class="sheet" style="height:200px"></div></div>`;
+  v.innerHTML = `<div class="page"><h2>${esc(t("rulesH"))}</h2><div class="sheet" style="height:200px"></div></div>`;
   try {
     state.rules = await api("/api/rules");
     const p = state.rules.parsed, m = p.match, w = m.weights;
     const lv = p.urgency.levels;
-    v.innerHTML = `<div class="page"><h2>Regeln</h2>
-      <p class="lead">Alle fachlichen Regeln stehen in einer Datei: <b>config/rules.yaml</b>. Eine Regel ändern heißt: eine Zeile ändern, speichern und hier neu prüfen. Regelstand ${esc(state.rules.version)}.</p>
+    await ensureTx(Object.values(lv).map((x) => x.response_target));
+    v.innerHTML = `<div class="page"><h2>${esc(t("rulesH"))}</h2>
+      <p class="lead">${t("rulesLead", esc(state.rules.version))}</p>
       <div class="rule-cards">
-        <div class="rule-card"><h3>Zuordnung</h3><dl><dt>Schwelle</dt><dd>${num(m.threshold)}</dd><dt>Mindestabstand</dt><dd>${num(m.min_margin)}</dd>
-          <dt>Unbekannter Absender erzwingt Prüfung</dt><dd>${m.unknown_sender_forces_review ? "ja" : "nein"}</dd></dl></div>
-        <div class="rule-card"><h3>Punkte je Merkmal</h3><dl>${Object.entries(w).map(([k, x]) => `<dt>${SIG_LABEL[k]}</dt><dd>${num(x)}</dd>`).join("")}</dl></div>
-        <div class="rule-card"><h3>Dringlichkeit</h3><dl>${Object.entries(lv).map(([k, x]) => `<dt>${k}</dt><dd>${esc(x.response_target)}</dd>`).join("")}
-          <dt>Englische Etagen</dt><dd>${p.normalize.english_floor_counting === "ask" ? "nachfragen" : "europäisch"}</dd></dl></div>
+        <div class="rule-card"><h3>${esc(t("rcMatch"))}</h3><dl><dt>${esc(t("threshold"))}</dt><dd>${num(m.threshold)}</dd><dt>${esc(t("minMargin"))}</dt><dd>${num(m.min_margin)}</dd>
+          <dt>${esc(t("unknownForces"))}</dt><dd>${esc(m.unknown_sender_forces_review ? t("yes") : t("no"))}</dd></dl></div>
+        <div class="rule-card"><h3>${esc(t("rcWeights"))}</h3><dl>${Object.entries(w).map(([k, x]) => `<dt>${esc(SIG(k))}</dt><dd>${num(x)}</dd>`).join("")}</dl></div>
+        <div class="rule-card"><h3>${esc(t("rcUrgency"))}</h3><dl>${Object.entries(lv).map(([k, x]) => `<dt>${URG(k)}</dt><dd>${X(x.response_target)}</dd>`).join("")}
+          <dt>${esc(t("engFloors"))}</dt><dd>${esc(p.normalize.english_floor_counting === "ask" ? t("ask") : t("european"))}</dd></dl></div>
       </div>
-      <div><button class="btn primary" id="recheck">Alle Beispiele mit diesen Regeln neu prüfen</button></div>
+      <div><button class="btn primary" id="recheck">${esc(t("recheck"))}</button></div>
       <div id="recheck-out"></div>
       <pre class="yaml">${yamlHtml(state.rules.yaml)}</pre></div>`;
     $("#recheck").addEventListener("click", recheckAll);
-  } catch (e) { v.innerHTML = `<div class="page"><h2>Regeln</h2><p class="err">${esc(e.message)}</p></div>`; }
+  } catch (e) { v.innerHTML = `<div class="page"><h2>${esc(t("rulesH"))}</h2><p class="err">${esc(e.message)}</p></div>`; }
 }
 
 async function recheckAll() {
   const out = $("#recheck-out");
-  out.innerHTML = `<p class="reader-note">Prüfe ${state.scenarios.length} Beispiele …</p>`;
+  out.innerHTML = `<p class="reader-note">${esc(t("checking", state.scenarios.length))}</p>`;
   state.results.clear();
   const rows = [];
   for (const sc of state.scenarios) {
@@ -667,11 +732,11 @@ async function recheckAll() {
     rows.push({ sc, c, misses: expectationCheck(sc, c) });
   }
   const bad = rows.filter((r) => r.misses.length).length;
-  out.innerHTML = `<table class="log"><thead><tr><th>Szenario</th><th>Status</th><th>Vertrag</th><th>Dringlichkeit</th><th>Prüfregeln</th><th>Erwartung</th></tr></thead><tbody>
-    ${rows.map(({ sc, c, misses }) => `<tr><td><b>${esc(sc.id)}</b> ${esc(sc.title)}</td><td><span class="chip s-${c.status}">${STATUS[c.status].label}</span></td>
-      <td>${esc(c.match.selected_contract || "–")}</td><td>${esc(c.urgency.level)}</td><td>${esc((c.match.failed_gates || []).join(", ") || "–")}</td>
-      <td>${misses.length ? `<span class="err">weicht ab: ${esc(misses.join(", "))}</span>` : "✓ erfüllt"}</td></tr>`).join("")}</tbody></table>
-    <p class="reader-note">${bad ? `${bad} Beispiel(e) verhalten sich mit den geänderten Regeln anders als erwartet – genau das soll sichtbar werden.` : "Alle Beispiele verhalten sich wie erwartet."}</p>`;
+  out.innerHTML = `<table class="log"><thead><tr><th>${esc(t("scenario"))}</th><th>${esc(t("mStatus"))}</th><th>${esc(t("contract"))}</th><th>${esc(t("secUrgency"))}</th><th>${esc(t("gatesAria"))}</th><th>${esc(t("expectation"))}</th></tr></thead><tbody>
+    ${rows.map(({ sc, c, misses }) => `<tr><td><b>${esc(sc.id)}</b> ${esc(sc.title)}</td><td><span class="chip s-${c.status}">${esc(STATUS()[c.status].label)}</span></td>
+      <td>${esc(c.match.selected_contract || "–")}</td><td>${URG(c.urgency.level)}</td><td>${esc((c.match.failed_gates || []).join(", ") || "–")}</td>
+      <td>${misses.length ? `<span class="err">${esc(t("deviates") + misses.join(", "))}</span>` : esc(t("fulfilled"))}</td></tr>`).join("")}</tbody></table>
+    <p class="reader-note">${esc(bad ? t("nBad", bad) : t("allGood"))}</p>`;
   renderInbox();
 }
 
@@ -679,30 +744,26 @@ async function renderAudit() {
   const v = $("#view-audit");
   try {
     const lines = await api("/api/audit");
-    v.innerHTML = `<div class="page"><h2>Protokoll</h2><p class="lead">Jede menschliche Aktion – Freigabe, Auftrag, Option – wird hier unveränderlich angehängt (var/audit.jsonl). Systemschritte stehen im Vorgang selbst.</p>
-      ${lines.length ? `<table class="log"><thead><tr><th>Zeit</th><th>Wer</th><th>Aktion</th><th>Vorgang</th><th>Vertrag</th><th>Begründung</th></tr></thead><tbody>
-      ${[...lines].reverse().map((l) => `<tr><td>${time(l.ts)}</td><td>${esc(l.actor)}</td><td>${esc(l.event)}</td><td>${esc(l.details?.case_id)}</td><td>${esc(l.details?.contract_id || l.details?.object_id || "–")}</td><td>${esc(l.details?.reason || "–")}</td></tr>`).join("")}</tbody></table>`
-      : `<div class="empty-state"><h3>Noch keine Aktionen</h3><p>Sobald jemand eine Zuordnung oder einen Entwurf freigibt, erscheint es hier.</p></div>`}</div>`;
-  } catch (e) { v.innerHTML = `<div class="page"><h2>Protokoll</h2><p class="err">${esc(e.message)}</p></div>`; }
+    await ensureTx(lines.map((l) => l.details?.reason).filter(Boolean));
+    v.innerHTML = `<div class="page"><h2>${esc(t("auditH"))}</h2><p class="lead">${esc(t("auditLead"))}</p>
+      ${lines.length ? `<table class="log"><thead><tr><th>${esc(t("time"))}</th><th>${esc(t("who"))}</th><th>${esc(t("action"))}</th><th>${esc(t("caseCol"))}</th><th>${esc(t("contract"))}</th><th>${esc(t("reasonCol"))}</th></tr></thead><tbody>
+      ${[...lines].reverse().map((l) => `<tr><td>${time(l.ts)}</td><td>${esc(l.actor)}</td><td>${esc(actionName(l.event))}</td><td>${esc(l.details?.case_id)}</td><td>${esc(l.details?.contract_id || l.details?.object_id || "–")}</td><td>${l.details?.reason ? X(l.details.reason) : "–"}</td></tr>`).join("")}</tbody></table>`
+      : `<div class="empty-state"><h3>${esc(t("auditEmptyH"))}</h3><p>${esc(t("auditEmptyP"))}</p></div>`}</div>`;
+  } catch (e) { v.innerHTML = `<div class="page"><h2>${esc(t("auditH"))}</h2><p class="err">${esc(e.message)}</p></div>`; }
 }
 
 function renderFlow() {
-  $("#view-flow").innerHTML = `<div class="page"><h2>Ablauf</h2>
-    <p class="lead">Der sichtbare Prozess läuft in n8n: ein Knoten pro Schritt. n8n leitet nur weiter – entschieden wird im Python-Dienst nach den Regeln, gehandelt erst nach Freigabe hier.</p>
-    <figure class="flow-figure"><img src="/static/n8n-workflow.png" alt="n8n-Workflow: E-Mail eingegangen, verstehen, zuordnen, frühere Vorgänge, Dringlichkeit, Entwurf, Aufgabe, Prüfliste" onerror="this.closest('figure').hidden=true"></figure>
-    <ol class="flow-steps">
-      <li><b>Verstehen</b>Art, Schadenart und Fakten aus der E-Mail lesen – mit Groq oder ohne KI per Regeln.</li>
-      <li><b>Zuordnen</b>Punkte je Merkmal, Widersprüche schließen aus, Schwelle und Abstand, Vertrag aktiv?</li>
-      <li><b>Frühere Vorgänge</b>Verwandte Fälle derselben Einheit, nur intern.</li>
-      <li><b>Dringlichkeit</b>Regeln setzen die Untergrenze, die KI darf nur erhöhen.</li>
-      <li><b>Entwurf</b>Antwort in der Sprache der E-Mail – ohne ERP-Daten, wenn unklar.</li>
-      <li><b>Aufgabe</b>Handwerker, Klärung, Gebäude-Notdienst oder Weiterleitung – immer mit Freigabe.</li>
-    </ol></div>`;
+  $("#view-flow").innerHTML = `<div class="page"><h2>${esc(t("flowH"))}</h2>
+    <p class="lead">${esc(t("flowLead"))}</p>
+    <figure class="flow-figure"><img src="/static/n8n-workflow.png" alt="${esc(t("flowAlt"))}" onerror="this.closest('figure').hidden=true"></figure>
+    <ol class="flow-steps">${ui().flow.map(([h, p]) => `<li><b>${esc(h)}</b>${esc(p)}</li>`).join("")}</ol></div>`;
 }
 
+let currentView = "case";
 function switchView(name) {
+  currentView = name;
   $$(".view").forEach((v) => (v.hidden = v.dataset.view !== name));
-  $$(".view-tab").forEach((t) => t.setAttribute("aria-current", t.dataset.view === name ? "page" : "false"));
+  $$(".view-tab").forEach((tab) => tab.setAttribute("aria-current", tab.dataset.view === name ? "page" : "false"));
   if (name === "rules") renderRules();
   if (name === "audit") renderAudit();
   if (name === "flow") renderFlow();
@@ -718,7 +779,11 @@ function bind() {
     await loadScenarios();
     if (keep) openScenario(keep);
   });
-  $$(".view-tab").forEach((t) => t.addEventListener("click", () => switchView(t.dataset.view)));
+  $("#lang").addEventListener("change", (e) => {
+    state.lang = e.target.value; localSet("lang", state.lang);
+    applyStatic(); renderInbox(); switchView(currentView); renderCase();
+  });
+  $$(".view-tab").forEach((tab) => tab.addEventListener("click", () => switchView(tab.dataset.view)));
   $$(".segmented button").forEach((b) => b.addEventListener("click", async () => {
     state.source = b.dataset.source;
     $$(".segmented button").forEach((x) => x.setAttribute("aria-selected", x === b));
@@ -736,6 +801,7 @@ function bind() {
 
 (async function boot() {
   bind();
+  applyStatic();
   renderCase();
   try {
     state.rules = await api("/api/rules");
@@ -744,6 +810,6 @@ function bind() {
     if (first) openScenario(first.id);
     loadStore();
   } catch (e) {
-    $("#view-case").innerHTML = `<div class="case"><div class="empty-state"><h3>Dienst nicht erreichbar</h3><p class="err">${esc(e.message)}</p><p>Start: <code>uv run intake-ui</code></p></div></div>`;
+    $("#view-case").innerHTML = `<div class="case"><div class="empty-state"><h3>${esc(t("offlineH"))}</h3><p class="err">${esc(e.message)}</p><p>${esc(t("start"))}: <code>uv run intake-ui</code></p></div></div>`;
   }
 })();
