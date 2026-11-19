@@ -157,6 +157,9 @@ def test_different_multiword_street_vetoes_contract_and_object_action(address, s
     ("12 und 14.5", ["14.5"]),
     ("12 + 14", ["14"]),
     ("12 & 14", ["14"]),
+    ("12 bzw. 14", ["14"]),
+    ("12 BZW.\n14", ["14"]),
+    ("12 bzw. 14 bzw. 16", ["14", "16"]),
 ])
 @pytest.mark.parametrize("in_subject", [False, True])
 def test_complete_house_number_expressions_force_building_review(number, alternatives, in_subject, tmp_path):
@@ -378,6 +381,10 @@ def test_uncertainty_near_location_is_literal_evidence(rules, marker, before):
     "Water is leaking. Musterstr. 12, 2. OG left. Please come either today or tomorrow. Max Mustermann",
     "Wasser läuft aus. Musterstr. 12, 2. OG links; bitte heute oder morgen kommen. Max Mustermann",
     "Water is leaking. Musterstr. 12, 2. OG left; please come either today or tomorrow. Max Mustermann",
+    "Wasser läuft aus. Musterstr. 12, 2. OG links. Bitte kommen Sie heute bzw. morgen. Max Mustermann",
+    "Wasser läuft aus. Musterstr. 12, 2. OG links; bitte heute bzw. morgen kommen. Max Mustermann",
+    "Wasser läuft aus. Musterstr. 12, 2. OG links; bitte entweder heute oder morgen kommen. Max Mustermann",
+    "Wasser läuft aus. Musterstr. 12, 2. OG links; bitte am 2. bzw. 3. kommen. Max Mustermann",
 ])
 def test_unrelated_alternatives_do_not_force_location_review(rules, body):
     email = InboundEmail(body=body)
@@ -584,8 +591,8 @@ def test_uncertainty_question_about_location_still_forces_review(rules):
 @pytest.mark.parametrize("location,alternatives,building_uncertain", [
     ("Musterstraße 12 oder 14, 2. OG links", ["14"], True),
     ("Musterstr. 12/14, 2. OG links", ["14"], True),
-    ("Musterstr. 12, 2. oder 3. OG links", ["2.", "3. OG"], False),
-    ("Musterstr. 12, 2. oder 3. Etage links", ["2.", "3. Etage"], False),
+    ("Musterstr. 12, 2. oder 3. OG links", ["3. OG links"], False),
+    ("Musterstr. 12, 2. oder 3. Etage links", ["3. Etage links"], False),
     ("Musterstr. 12, 2. OG links oder rechts", ["rechts"], False),
 ])
 @pytest.mark.parametrize("in_subject", [False, True])
@@ -669,3 +676,72 @@ def test_time_uncertainty_in_separate_clause_is_not_location_uncertainty():
     assert case.understanding.extraction.location_alternatives == []
     assert Gate.UNIT_AMBIGUOUS not in case.match.failed_gates
     assert case.match.building_uncertain is False
+
+
+def test_wo10_inspection_example_keeps_first_floor_and_requires_unit_review():
+    email = InboundEmail(body="Wasser läuft aus. Musterstraße 12. Die Wohnung liegt im 2. bzw. 3. OG rechts. "
+                         "Viele Grüße, Max Mustermann")
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    extraction = case.understanding.extraction
+    assert extraction.floor_raw == "im 2."
+    assert extraction.side_raw == "rechts"
+    assert extraction.location_alternatives == ["3. OG rechts"]
+    assert case.status == Status.NEEDS_REVIEW
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.selected_contract is None
+    assert case.match.building_uncertain is False
+    assert case.match.object_id == "OBJ-MS12"
+
+
+@pytest.mark.parametrize("location,first_floor,first_side,alternatives", [
+    ("2. bzw. 3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("2. oder 3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("2./3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("2.-3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("2. bis 3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("zweite oder dritte Etage rechts", "zweite", "rechts", ["dritte Etage rechts"]),
+    ("2nd or 3rd floor right", "2nd", "right", ["3rd floor right"]),
+    ("2. OG links bzw. rechts", "2. OG", "links", ["rechts"]),
+    ("2. OG entweder links oder rechts", "2. OG", "links", ["rechts"]),
+    ("entweder 2. oder 3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("entweder 2. OG links oder 3. OG rechts", "2. OG", "links", ["3. OG rechts"]),
+    ("im zweiten bzw. dritten Stock rechts", "im zweiten", "rechts", ["dritten Stock rechts"]),
+    ("2. BZW.\n3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("2.–3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("2.—3. OG rechts", "2.", "rechts", ["3. OG rechts"]),
+    ("second or third floor right", "second", "right", ["third floor right"]),
+    ("2. OG links bzw. 3. OG rechts", "2. OG", "links", ["3. OG rechts"]),
+    ("2. bzw. 3. bzw. 4. OG rechts", "2.", "rechts", ["3. bzw. 4. OG rechts"]),
+    ("zweite oder dritte oder vierte Etage rechts", "zweite", "rechts", ["dritte oder vierte Etage rechts"]),
+])
+@pytest.mark.parametrize("in_subject", [False, True])
+def test_compound_floor_and_side_choices_keep_literal_first_and_remaining_locations(
+    location, first_floor, first_side, alternatives, in_subject,
+):
+    email = InboundEmail(
+        subject=location if in_subject else "",
+        body="Wasser läuft aus. Musterstraße 12. " + ("" if in_subject else location + ". ")
+             + "Viele Grüße, Max Mustermann",
+    )
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    extraction = case.understanding.extraction
+    assert extraction.floor_raw == first_floor
+    assert extraction.side_raw == first_side
+    assert extraction.location_alternatives == alternatives
+    assert all(span in location for span in [first_floor, first_side, *alternatives])
+    assert case.status == Status.NEEDS_REVIEW
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.selected_contract is None
+    assert case.match.building_uncertain is False
+    assert case.match.object_id == "OBJ-MS12"
+
+
+@pytest.mark.parametrize("body,subject", [
+    ("2. bzw.", "3. OG rechts"),
+    ("zweite oder", "dritte Etage rechts"),
+    ("2nd or", "3rd floor right"),
+])
+def test_compound_floors_never_join_body_and_subject(rules, body, subject):
+    extraction = OfflineProvider().understand(InboundEmail(body=body, subject=subject), rules).extraction
+    assert extraction.floor_raw == subject.rsplit(" ", 1)[0]
+    assert extraction.location_alternatives == []

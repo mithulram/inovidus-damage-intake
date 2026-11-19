@@ -28,7 +28,7 @@ _HOUSE_NUMBER_EXTRA = (
     r"(?!\s*\.?\s*(?:Obergeschoss|Stockwerk|Etage|Stock|OG|floor)\b)"
 )
 _HOUSE_NUMBER_CONTINUATION = re.compile(
-    rf"\s*(?:[-–—/,+&]|und\b|oder\b|bis\b)\s*(?P<extra>{_HOUSE_NUMBER_EXTRA})", re.IGNORECASE,
+    rf"\s*(?:[-–—/,+&]|und\b|oder\b|bzw\.(?!\w)|bis\b)\s*(?P<extra>{_HOUSE_NUMBER_EXTRA})", re.IGNORECASE,
 )
 _ADDRESS = re.compile(
     # "am" alone is a function word, but retain it before another prefix word
@@ -60,7 +60,7 @@ def _raw(pattern: str, text: str) -> str | None:
     return hit.group(0) if hit else None
 
 
-def _floors(text: str, rules: Rules) -> list[re.Match]:
+def _floors(text: str, rules: Rules, start: int, end: int) -> list[re.Match]:
     terms = sorted(rules.normalize.ground_floor_terms + rules.normalize.unclear_floor_terms,
                    key=len, reverse=True)
     ordinals = "|".join(map(re.escape, rules.normalize.ordinal_words))
@@ -70,7 +70,25 @@ def _floors(text: str, rules: Rules) -> list[re.Match]:
         r"|(?:\d+\s*(?:st|nd|rd|th)|first|second|third|fourth|fifth)\s+floor\b"
         r"|(?:" + "|".join(map(re.escape, terms)) + r")\b)"
     )
-    return list(re.finditer(pattern, text, re.IGNORECASE))
+    # A shared suffix still describes every preceding choice: "2. bzw. 3. OG",
+    # "zweite oder dritte Etage", "2nd or 3rd floor". Keep each literal operand
+    # before selecting a primary floor; never synthesize a missing suffix.
+    abbreviated = re.compile(
+        r"\b(?P<abbreviated>(?:im\s+)?(?:\d+(?:\s*(?:st|nd|rd|th|\.))?"
+        r"|(?:" + ordinals + r")|first|second|third|fourth|fifth))(?!\w)",
+        re.IGNORECASE,
+    )
+    connector = r"(?:bzw\.(?!\w)|oder\b|or\b|bis\b|[-–—/])"
+    prefix_pattern = re.compile(rf"(?:{abbreviated.pattern}\s*{connector}\s*)+$", re.IGNORECASE)
+    floors = []
+    previous_end = start
+    for floor in re.compile(pattern, re.IGNORECASE).finditer(text, start, end):
+        prefix = prefix_pattern.search(text, previous_end, floor.start())
+        if prefix:
+            floors.extend(abbreviated.finditer(text, prefix.start(), prefix.end()))
+        floors.append(floor)
+        previous_end = floor.end()
+    return floors
 
 
 def _near(left: re.Match, right: re.Match, distance: int = 55) -> bool:
@@ -104,15 +122,6 @@ def _location_alternatives(
             end = alternative.end()
         if end < stop:
             spans.append((start, stop))
-    # In "2. oder 3. OG" only the second floor has a complete suffix.
-    # Both choices must survive as literal spans, without inventing "2. OG".
-    for floor in floors:
-        source_start = 0 if floor.start() < body_end else body_end + 1
-        prefix = re.search(r"\b(?P<first>\d+\s*\.)\s*(?:oder\b|/)\s*$",
-                           text[source_start:floor.start()], re.IGNORECASE)
-        if prefix and int(prefix.group("first").rstrip(". ")) != floor_key(floor):
-            spans.append((source_start + prefix.start("first"), source_start + prefix.end("first")))
-            spans.append(floor.span())
     for matches, key in (
         (addresses, lambda m: (normalize_street(m.group("street")), normalize_house_no(m.group("number")))),
         (floors, floor_key),
@@ -125,6 +134,12 @@ def _location_alternatives(
                 end = match.end()
                 # A floor followed directly by its side is one useful raw span.
                 if matches is floors:
+                    # Keep a shared suffix with intermediate alternatives too:
+                    # "dritte oder vierte Etage" is literal floor evidence,
+                    # whereas "dritte" alone would suggest building uncertainty.
+                    if match.lastgroup == "abbreviated":
+                        end = next(m.end() for m in floors
+                                   if m.start() > match.start() and m.lastgroup != "abbreviated")
                     following = next((s for s in sides if s.start() >= end
                                       and re.fullmatch(r"[\s,/-]{0,15}", text[end:s.start()])), None)
                     if following:
@@ -222,11 +237,19 @@ class OfflineProvider:
         )
         # Prefer facts in the body; the subject remains a fallback source.
         raw_text = f"{email.body}\n{email.subject}"
+        floors = [*_floors(raw_text, rules, 0, len(email.body)),
+                  *_floors(raw_text, rules, len(email.body) + 1, len(raw_text))]
         # Whitespace inside an address may include newlines, but an address
         # must never join a body prefix/number to text from the subject.
-        addresses = [*_ADDRESS.finditer(raw_text, 0, len(email.body)),
-                     *_ADDRESS.finditer(raw_text, len(email.body) + 1)]
-        floors = _floors(raw_text, rules)
+        addresses = []
+        for address in [*_ADDRESS.finditer(raw_text, 0, len(email.body)),
+                        *_ADDRESS.finditer(raw_text, len(email.body) + 1)]:
+            # "12, 2. bzw. 3. OG" ends the address at 12. A shared floor
+            # operand must not also become an alternative house number.
+            stop = next((f.start() for f in floors
+                         if address.start("number") <= f.start() < address.end("number")), address.end())
+            if bounded := _ADDRESS.match(raw_text, address.start(), stop):
+                addresses.append(bounded)
         address = addresses[0] if addresses else None
         floor = floors[0] if floors else None
         anchors = addresses + floors
