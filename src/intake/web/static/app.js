@@ -378,7 +378,7 @@ function urgencyPanel(c) {
 
 function approvals(c) {
   const all = c.audit || [];
-  const reset = all.map((a) => a.event.startsWith("neu verarbeitet (Regeln geändert)")).lastIndexOf(true);
+  const reset = all.map((a) => SUPERSEDE.test(a.event)).lastIndexOf(true);
   const ev = all.slice(reset + 1).filter((a) => a.actor !== "system");
   const assignIdx = ev.map((a) => a.event).lastIndexOf("approve_assignment");
   const assignment = assignIdx >= 0 ? ev[assignIdx] : undefined;
@@ -398,6 +398,7 @@ function stampHtml(a, fresh) {
   return `<div class="stamp${fresh ? " fresh" : ""}"><b>${esc(t("approved"))}</b><span>${esc(a.details?.contract_id || "")} · ${esc(a.actor)} · ${clock(a.ts)}</span></div>`;
 }
 
+const SUPERSEDE = /^neu verarbeitet \((Regeln|ERP-Daten) geändert\)/;
 const actionName = (ev) => ui().actions[ev] || ev;
 
 // English reading copy of a German reply (rendered from the English templates; never sent, never stored)
@@ -576,7 +577,7 @@ async function adopt(cur, c) {
   let stored = await api(`/api/cases/${encodeURIComponent(c.case_id)}?allow_missing=true`);
   if (!stored) stored = await api("/api/cases", c);  // first action: put this proposal into the review inbox
   // human actions on the CURRENT proposal (after the latest re-processing after a rule change)
-  const humanCount = (x) => { const a = x.audit || []; const r = a.map((e) => e.event.startsWith("neu verarbeitet (Regeln geändert)")).lastIndexOf(true);
+  const humanCount = (x) => { const a = x.audit || []; const r = a.map((e) => SUPERSEDE.test(e.event)).lastIndexOf(true);
     return a.slice(r + 1).filter((e) => e.actor !== "system").length; };
   const gen = (x) => x.processing?.generation ?? 0;
   if (humanCount(stored) === 0 && gen(c) > gen(stored)) {
@@ -642,13 +643,13 @@ async function act(btn) {
     }
     loadStore();
   } catch (e) {
-    if (e.status === 409 && /Regeln/.test(e.message)) {
+    if (e.status === 409 && /Regeln|ERP-Daten/.test(e.message)) {
       // rules changed since processing: re-process with today's rules; earlier approvals become invalid
       try {
         cur.case = await api("/api/process", { email: c.input, scenario_id: c.processing?.scenario_id, provider: state.provider, store: true });
         if (cur.kind === "scenario") state.results.set(cur.id, cur.case);
         renderCase();
-        const el2 = $("#act-err"); if (el2) el2.textContent = t("rulesChanged");
+        const el2 = $("#act-err"); if (el2) el2.textContent = t(/ERP-Daten/.test(e.message) ? "erpChanged" : "rulesChanged");
         return;
       } catch { /* fall through to message */ }
     } else if (e.status === 409) { try { cur.case = await api(`/api/cases/${encodeURIComponent(c.case_id)}`); renderCase(); } catch { /* keep view */ } }

@@ -460,3 +460,85 @@ def test_superseded_history_does_not_freeze_new_proposal(client, monkeypatch):
     other_reader = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1", "store": True,
                                                      "provider": "recorded"}).json()
     assert other_reader["processing"]["provider"] == "recorded(groq)"  # newer result accepted, not frozen
+
+
+# ---- round 11 --------------------------------------------------------------
+
+def _save(client, case: dict) -> None:
+    from intake.models import CaseRecord
+    client.app.state.store.save(CaseRecord.model_validate(case))
+
+
+# R11-01 – the ERP data the reviewer saw is pinned; a change blocks approval and voids old approvals
+def test_case_records_erp_version(client):
+    case = stored(client, "S1")
+    assert case["processing"]["erp_version"] == JsonERP().version
+    assert JsonERP(overrides={"contracts": [{"contract_id": "MV-10245", "active": False}]}).version != JsonERP().version
+
+
+def test_approval_refused_when_erp_data_changed(client):
+    case = stored(client, "S1")
+    old = client.get(f"/api/cases/{case['case_id']}").json()
+    old["processing"]["erp_version"] = "sha256:veraltet"
+    _save(client, old)
+    r = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                          "contract_id": "MV-10245"})
+    assert r.status_code == 409 and "ERP-Daten" in r.json()["detail"]
+
+
+def test_erp_change_supersedes_frozen_proposal_and_voids_approvals(client):
+    case = stored(client, "S1")
+    client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                      "contract_id": "MV-10245"})
+    old = client.get(f"/api/cases/{case['case_id']}").json()
+    old["processing"]["erp_version"] = "sha256:alt"  # approved on older ERP data
+    _save(client, old)
+    sc = scenario("S1")
+    new = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1", "store": True}).json()
+    assert new["audit"][-1]["event"].startswith("neu verarbeitet (ERP-Daten geändert)")
+    assert new["processing"]["erp_version"] == JsonERP().version
+    stale = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "order_contractor",
+                                              "contract_id": "MV-10245", "reason": "alt"})
+    assert stale.status_code == 403  # the approval given on the old data no longer counts
+
+
+# R11-02 – a single field holding alternatives is ambiguous for every provider (not only the rules reader)
+@pytest.mark.parametrize("field,value", [("floor_raw", "2. bzw. 3. OG"), ("floor_raw", "2./3. Etage"),
+                                         ("side_raw", "links bzw. rechts"), ("side_raw", "links oder rechts")])
+def test_compound_unit_value_forces_review(field, value):
+    r = match(ext(**{field: value}), InboundEmail(body="x", sender_email="max.mustermann@example.org"), JsonERP(), RULES)
+    assert r.selected_contract is None and "unit_ambiguous" in {g.value for g in r.failed_gates}
+    assert r.building_uncertain is False and r.object_id == "OBJ-MS12"
+
+
+@pytest.mark.parametrize("field,value", [("house_no", "12-14"), ("house_no", "12 oder 14"),
+                                         ("street_raw", "Musterstr. bzw. Hauptstr.")])
+def test_compound_address_value_makes_building_uncertain(field, value):
+    r = match(ext(**{field: value}), InboundEmail(body="x", sender_email="max.mustermann@example.org"), JsonERP(), RULES)
+    assert r.selected_contract is None and r.building_uncertain is True and r.object_id is None
+
+
+def test_compound_floor_is_unclear_not_last_number():
+    from intake.normalize import normalize_floor
+    assert normalize_floor("2. bzw. 3. OG", RULES.normalize)[:2] == (None, "unclear")
+    assert normalize_floor("zweite Etage", RULES.normalize)[:2] == (2, "ok")
+
+
+# R11-03 – every step of a chain runs on the rules and ERP data the case started with
+def test_step_rejects_case_from_other_rules_version(client):
+    sc = scenario("S1")
+    case = client.post("/api/steps/understand", json={"email": sc["email"], "scenario_id": "S1"}).json()
+    case["processing"]["rules_version"] = "sha256:anders"
+    r = client.post("/api/steps/match", json={"case": case, "scenario_id": "S1"})
+    assert r.status_code == 409 and "Regeln" in r.json()["detail"]
+    case["processing"]["rules_version"] = RULES.version
+    case["processing"]["erp_version"] = "sha256:anders"
+    r = client.post("/api/steps/match", json={"case": case, "scenario_id": "S1"})
+    assert r.status_code == 409 and "ERP-Daten" in r.json()["detail"]
+
+
+def test_store_rejects_proposal_built_on_old_basis(client):
+    sc = scenario("S1")
+    case = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1"}).json()
+    case["processing"]["erp_version"] = "sha256:alt"
+    assert client.post("/api/cases", json=case).status_code == 409

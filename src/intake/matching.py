@@ -33,7 +33,7 @@ from .models import (
     NormalizedLocation,
     Signal,
 )
-from .normalize import fold, normalize_house_no, normalize_location, normalize_street
+from .normalize import compound_location, fold, normalize_house_no, normalize_location, normalize_street
 from .rules import Rules
 
 SIDE_LABEL = {"L": "links", "R": "rechts", "M": "Mitte"}
@@ -221,9 +221,16 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
     if loc.floor_status == "english_ordinal" and rules.normalize.english_floor_counting == "ask":
         fail(Gate.FLOOR_AMBIGUOUS, f"Zählweise der Etage unklar: {loc.floor_note}")
     building_uncertain = False
-    if ext.location_alternatives:
+    # Same check for every provider: a single field that itself holds alternatives is ambiguous too.
+    field_values = {"street": ext.street_raw, "house_no": ext.house_no, "floor": ext.floor_raw, "side": ext.side_raw}
+    compound = {f: v for f, v in field_values.items() if compound_location(v, f, rules.normalize)}
+    alternatives = list(dict.fromkeys([*ext.location_alternatives, *compound.values()]))
+    if compound.keys() & {"street", "house_no"}:
+        building_uncertain = True
+        object_id = None
+    if alternatives:
         fail(Gate.UNIT_AMBIGUOUS, "E-Mail nennt mehrere oder unsichere Ortsangaben: "
-                                  + "; ".join(ext.location_alternatives) + " – beim Mieter nachfragen")
+                                  + "; ".join(alternatives) + " – beim Mieter nachfragen")
         street_word = re.compile(
             r"(str\.?|stra(ss|ß)e|weg|platz|allee|gasse|ring)(\b|\d)|\b\d+\s*[a-z]?\s*$"
             r"|adresse|anschrift|hausnummer|hausnr|haus\b|gebäude|gebaeude|objekt"
@@ -233,7 +240,7 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
                                re.IGNORECASE)
         # Fail-safe: doubt counts as doubt about the BUILDING unless it clearly concerns only floor/side.
         bare_floor = re.compile(r"^\s*\d+\s*\.?\s*$")  # "2." from "2. oder 3. OG"
-        building_uncertain = any(street_word.search(alt) or not (unit_word.search(alt) or bare_floor.match(alt))
+        building_uncertain = building_uncertain or any(street_word.search(alt) or not (unit_word.search(alt) or bare_floor.match(alt))
                                  for alt in ext.location_alternatives)
         if building_uncertain:
             object_id = None

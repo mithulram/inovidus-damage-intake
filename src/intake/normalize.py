@@ -41,6 +41,30 @@ def normalize_house_no(house_no: str | None) -> str | None:
     return re.sub(r"\s+", "", house_no.lower()) or None
 
 
+# Words/signs that turn one location value into several ("2. bzw. 3. OG", "links oder rechts",
+# "Nr. 12/14"). Any provider (rules, Groq, recorded) can return such a value – it is never definite.
+_ALTERNATIVE = re.compile(r"\b(bzw|beziehungsweise|oder|or|und|and|evtl|eventuell|vielleicht|wahrscheinlich|maybe|either"
+                          r"|entweder|ca|circa)\b|/|&|\?|\.\.\.")
+_NUMBER_RANGE = re.compile(r"\d+\s*[a-z]?\s*[-–,+]\s*\d+")
+
+
+def compound_location(raw: str | None, field: str, rules: NormalizeRules | None = None) -> bool:
+    """True when a single extracted value names more than one place or hedges (field: street|house_no|floor|side)."""
+    if not raw or not raw.strip():
+        return False
+    text = fold(raw)
+    if _ALTERNATIVE.search(text) or _NUMBER_RANGE.search(text):
+        return True
+    if field == "floor":
+        numbers = set(re.findall(r"\d+", text))
+        return len(numbers) > 1
+    if field == "side" and rules is not None:
+        tokens = {t.rstrip(".") for t in re.findall(r"[a-z]+\.?", text)} | set(re.findall(r"[a-z]+\.?", text))
+        sides = {side for side, terms in rules.side_terms.items() if tokens & {fold(t) for t in terms}}
+        return len(sides) > 1
+    return False
+
+
 def normalize_floor(raw: str | None, rules: NormalizeRules) -> tuple[int | None, str, str | None]:
     """Return (floor, status, note). German counting: EG = 0, 1. OG / erste Etage = 1.
 
@@ -49,6 +73,8 @@ def normalize_floor(raw: str | None, rules: NormalizeRules) -> tuple[int | None,
     if not raw or not raw.strip():
         return None, "missing", "Keine Etage angegeben"
     text = fold(raw)
+    if compound_location(raw, "floor"):
+        return None, "unclear", f"'{raw}' nennt mehrere oder unsichere Etagen"
     folded_ground = [fold(t) for t in rules.ground_floor_terms]
     if any(re.search(rf"(^|\W){re.escape(t)}(\W|$)", text) for t in folded_ground):
         return 0, "ok", f"'{raw}' = Erdgeschoss (EG)"
@@ -83,7 +109,7 @@ def normalize_floor(raw: str | None, rules: NormalizeRules) -> tuple[int | None,
 
 
 def normalize_side(raw: str | None, rules: NormalizeRules) -> Side | None:
-    if not raw:
+    if not raw or compound_location(raw, "side", rules):
         return None
     text = fold(raw)
     tokens = re.findall(r"[a-z]+\.?", text)

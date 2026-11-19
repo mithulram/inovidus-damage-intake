@@ -5,6 +5,7 @@ writes only after human approval)."""
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Protocol
@@ -97,6 +98,9 @@ class JsonERP:
         self._properties = [Property.model_validate(p) for p in _apply_patches(erp["properties"], overrides.get("properties", []), "object_id")]
         self._contracts = [Contract.model_validate(c) for c in _apply_patches(erp["contracts"], overrides.get("contracts", []), "contract_id")]
         self._cases = [ExistingCase.model_validate(c) for c in _apply_patches(cases["cases"], overrides.get("cases", []), "case_id")]
+        effective = {"p": [p.model_dump() for p in self._properties], "c": [c.model_dump() for c in self._contracts],
+                     "v": [c.model_dump() for c in self._cases]}
+        self.version = "sha256:" + hashlib.sha256(json.dumps(effective, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
 
     def contracts(self) -> list[Contract]:
         return list(self._contracts)

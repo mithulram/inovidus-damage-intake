@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
 from .. import actions, pipeline
-from ..actions import Approval, AuditLog
+from ..actions import SUPERSEDED_ERP, SUPERSEDED_RULES, Approval, AuditLog, is_supersede
 from ..context import Context
 from ..env import load_dotenv
 from ..i18n import translate_many
@@ -59,7 +59,6 @@ class StepRequest(RequestModel):
     scenario_id: str | None = None
 
 
-SUPERSEDED = "neu verarbeitet (Regeln geändert) – frühere Freigaben gelten nicht mehr"
 ACTION_EVENTS = {"approve_assignment", "order_contractor", "object_action", "approve_reply", "choose_staff_option"}
 
 
@@ -126,6 +125,10 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
     lock = threading.RLock()  # serialises every read-modify-write of a stored case
 
     def store_case(case: CaseRecord) -> CaseRecord:
+        try:  # a completed proposal must have been built on today's rules and ERP data
+            pipeline.check_versions(case, _context(scenario_id=case.processing.scenario_id))
+        except pipeline.VersionMismatch as exc:
+            raise HTTPException(409, str(exc)) from None
         with lock:
             return _store_case(case)
 
@@ -153,11 +156,15 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             if existing.model_dump(exclude=volatile) == case.model_dump(exclude=volatile):
                 existing.processing.generation = new_gen  # same result: keep it, but advance the watermark
                 return app.state.store.save(existing)
-            start = max((i for i, e in enumerate(existing.audit) if e.event == SUPERSEDED), default=-1) + 1
+            start = max((i for i, e in enumerate(existing.audit) if is_supersede(e.event)), default=-1) + 1
             human = any(e.actor != "system" for e in existing.audit[start:])  # current proposal only
-            if human and case.processing.rules_version == existing.processing.rules_version:
-                return existing  # a human already acted and the rules did not change: frozen
-            label = (SUPERSEDED if human else "neu verarbeitet (Regeln oder Leser geändert)")
+            same_basis = (case.processing.rules_version == existing.processing.rules_version
+                          and case.processing.erp_version == existing.processing.erp_version)
+            if human and same_basis:
+                return existing  # a human already acted and neither rules nor ERP data changed: frozen
+            erp_changed = case.processing.erp_version != existing.processing.erp_version
+            label = ((SUPERSEDED_ERP if erp_changed else SUPERSEDED_RULES) if human
+                     else "neu verarbeitet (Regeln oder Leser geändert)")
         case = case.model_copy(deep=True)
         event = AuditEvent(ts=datetime.now(timezone.utc), actor="system", event=label,
                            details={"case_id": case.case_id})
@@ -206,6 +213,8 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             case.processing.generation = time.time_ns()
         try:
             return pipeline.run_step(name, case, ctx)
+        except pipeline.VersionMismatch as exc:
+            raise HTTPException(409, str(exc)) from None
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
 
@@ -260,8 +269,10 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             if body.revision is not None and body.revision != len(case.audit):
                 raise HTTPException(409, "Der Vorgang wurde inzwischen geändert – bitte neu laden und erneut prüfen.")
             ctx = _context(scenario_id=case.processing.scenario_id)
-            if case.processing.rules_version and case.processing.rules_version != ctx.rules.version:
-                raise HTTPException(409, "Die Regeln wurden seit der Verarbeitung geändert – bitte den Vorgang neu verarbeiten und erneut prüfen.")
+            try:
+                pipeline.check_versions(case, ctx)  # rules AND ERP data must be the ones the reviewer saw
+            except pipeline.VersionMismatch as exc:
+                raise HTTPException(409, str(exc) + " Bitte den Vorgang neu verarbeiten und erneut prüfen.") from None
             if body.action == "choose_staff_option" and approval.reason in {"ask_registered_email", "reply_anyway"}:
                 # the reply the staff member will approve and copy is stored on the case itself
                 variant = "ask_registered_email" if approval.reason == "ask_registered_email" else None

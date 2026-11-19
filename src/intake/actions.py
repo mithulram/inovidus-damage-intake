@@ -21,6 +21,15 @@ from .rules import ROOT
 SIMULATED = "im Prototyp simuliert – kein echter ERP-Schreibzugriff"
 
 
+SUPERSEDED_RULES = "neu verarbeitet (Regeln geändert) – frühere Freigaben gelten nicht mehr"
+SUPERSEDED_ERP = "neu verarbeitet (ERP-Daten geändert) – frühere Freigaben gelten nicht mehr"
+
+
+def is_supersede(event: str) -> bool:
+    """Audit marker: a re-processing on a new basis that voids every earlier approval."""
+    return event in (SUPERSEDED_RULES, SUPERSEDED_ERP)
+
+
 class Approval(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -67,7 +76,7 @@ def execute(case: CaseRecord, approval: Approval, audit: AuditLog) -> CaseRecord
             raise PermissionError("Manuelle Zuordnung braucht eine Begründung")
         if action == "order_contractor":
             # only approvals given after the last re-processing count
-            start = max((i for i, e in enumerate(case.audit) if e.event.startswith("neu verarbeitet (Regeln geändert)")),
+            start = max((i for i, e in enumerate(case.audit) if is_supersede(e.event)),
                         default=-1) + 1
             current = [e for e in case.audit[start:] if e.event == "approve_assignment" and e.actor != "system"
                        and e.details.get("case_id") == case.case_id]

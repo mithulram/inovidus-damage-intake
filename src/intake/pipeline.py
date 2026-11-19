@@ -24,15 +24,29 @@ def new_case(email: InboundEmail, ctx: Context, scenario_id: str | None = None) 
     short = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:6].upper()
     case = CaseRecord(case_id=f"SM-{received:%Y%m%d}-{short}", received_at=received, input=email)
     case.processing.rules_version = ctx.rules.version
+    case.processing.erp_version = getattr(ctx.erp, "version", None)
     case.processing.scenario_id = scenario_id
     case.audit.append(AuditEvent(ts=now, actor="system", event="eingegangen",
                                  details={"subject": email.subject, "sender": email.sender_email}))
     return case
 
 
+class VersionMismatch(ValueError):
+    """Rules or ERP data changed while the case was being processed – restart the chain."""
+
+
+def check_versions(case: CaseRecord, ctx: Context) -> None:
+    erp_version = getattr(ctx.erp, "version", None)
+    if case.processing.rules_version and case.processing.rules_version != ctx.rules.version:
+        raise VersionMismatch("Die Regeln wurden während der Verarbeitung geändert – bitte neu verarbeiten.")
+    if case.processing.erp_version and erp_version and case.processing.erp_version != erp_version:
+        raise VersionMismatch("Die ERP-Daten wurden seit der Verarbeitung geändert – bitte neu verarbeiten.")
+
+
 def run_step(name: str, case: CaseRecord, ctx: Context) -> CaseRecord:
     if name not in STEPS:
         raise KeyError(f"Unbekannter Schritt '{name}' (erlaubt: {', '.join(STEPS)})")
+    check_versions(case, ctx)
     case = STEPS[name](case, ctx)
     case.audit.append(AuditEvent(ts=ctx.now(), actor="system", event=f"schritt:{name}"))
     if name == LAST_STEP:
