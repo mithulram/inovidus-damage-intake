@@ -777,3 +777,23 @@ def test_steps_cannot_be_rerun_out_of_order(client):
         case = client.post(f"/api/steps/{name}", json={"case": case, "scenario_id": "S1"}).json()
     assert client.post("/api/steps/match", json={"case": case, "scenario_id": "S1"}).status_code == 422
     assert client.post("/api/cases", json=case).status_code == 200
+
+
+# ---- own probing while Codex was unavailable (Claude, not an independent review) ----
+
+@pytest.mark.parametrize("text", ["Musterstraße 12, 2. OG links (oder doch 3.?).", "Musterstraße 12, 2. OG links (glaube ich)."])
+def test_hedging_bracket_after_place_forces_review(client, text):
+    case = _process(client, f"Wasser läuft aus der Spüle. {text} Viele Grüße, Max Mustermann")
+    assert case["status"] == "NEEDS_REVIEW" and case["match"]["selected_contract"] is None
+
+
+@pytest.mark.parametrize("text", ["Ich wohne Musterstraße 12, 2. OG links, schreibe aber für meine Mutter. Viele Grüße, Max Mustermann",
+                                  "Musterstraße 12, 2. OG links. Viele Grüße, Max Mustermann i. A. Hausverwaltung Schmidt"])
+def test_writing_for_someone_else_is_not_the_tenant(client, text):
+    case = _process(client, f"Wasser läuft aus der Spüle. {text}")
+    assert case["status"] == "NEEDS_REVIEW" and case["match"]["selected_contract"] is None
+
+
+def test_plain_bracket_after_place_still_matches(client):
+    case = _process(client, "Wasser läuft aus der Spüle. Musterstraße 12, 2. OG links (Küche). Viele Grüße, Max Mustermann")
+    assert case["status"] == "READY_FOR_APPROVAL" and case["match"]["selected_contract"] == "MV-10245"

@@ -266,6 +266,12 @@ class OfflineProvider:
         side = sides[0].group(0) if sides else None
         sender_name = _signature(email.body) or (email.sender_display_name or "").strip() or None
         holder = re.search(rf"(?i:Wohnung\s+von|für\s+meinen\s+Partner)\s+({_NAME})", email.body)
+        # Writing for someone else ("für meine Mutter", "i. A. Hausverwaltung", "on behalf of") without naming
+        # the contract holder: the tenant is unknown – never assume the writer is the tenant.
+        proxy = re.search(r"(?i:\bfür\s+(?:meine[nmr]?|unsere[nmr]?)\s+(?:Mutter|Vater|Eltern|Oma|Opa|Großmutter|Großvater"
+                          r"|Tochter|Sohn|Schwester|Bruder|Nachbar(?:in|n)?|Tante|Onkel|Frau|Mann|Partnerin|Mieter(?:in)?)"
+                          r"|\bi\.\s*A\.|\bim\s+Auftrag\b|\bon\s+behalf\s+of\b|\bfor\s+my\s+(?:mother|father|parents|neighbou?r))",
+                          email.body)
         room_term = next((r for r in cfg.rooms if fold(r) in folded), None)
         room = (_raw(re.escape(room_term), raw_text) or room_term.capitalize()) if room_term else None
         description = next((s.strip() for s in re.split(r"(?<=[.!?])\s+", email.body)
@@ -291,6 +297,11 @@ class OfflineProvider:
             clause_end = stop.start() if stop else min(len(raw_text), place.end() + 80)
             if hit := negation.search(raw_text, place.end(), clause_end):
                 alternatives.append(raw_text[place.start():hit.end()])
+            # a bracket right after the place that hedges it: "2. OG links (oder doch 3.?)", "(glaube ich)"
+            if (aside := re.match(r"\s*\(([^()]{0,60})\)", raw_text[place.end():])) and re.search(
+                    r"\?|\b(?:oder|bzw|vielleicht|eventuell|evtl|glaube|unsicher|or|maybe|think)\b", aside.group(1),
+                    re.IGNORECASE):
+                alternatives.append(raw_text[place.start():place.end() + aside.end()])
         # "Am Beispielweg 7": a preposition directly before the street may belong to its name. Capitalised
         # inside a sentence it does (street keeps it); otherwise the address is doubtful (review).
         street_override = None
@@ -309,7 +320,8 @@ class OfflineProvider:
             else:
                 alternatives.append(raw_text[start:place.end()])
         extraction = Extraction(
-            sender_name=sender_name, tenant_name=holder.group(1) if holder else sender_name,
+            sender_name=sender_name,
+            tenant_name=holder.group(1) if holder else (f"unbekannt ({proxy.group(0)})" if proxy else sender_name),
             street_raw=(street_override or address.group("street")) if address else None,
             house_no=address.group("number") if address else None,
             floor_raw=floor.group(0) if floor else None, side_raw=side, room=room,
