@@ -37,6 +37,8 @@ services:
           type: web
           name: inovidus-intake
           envVarKey: INTAKE_SERVICE_TOKEN
+      - key: INTAKE_WEBHOOK_TOKEN
+        generateValue: true        # callers send it as header X-Webhook-Token
       - key: N8N_OWNER_EMAIL
         value: owner@intake-demo.example
       - key: N8N_OWNER_PASSWORD

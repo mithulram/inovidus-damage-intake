@@ -148,7 +148,8 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             if existing.model_dump(exclude=volatile) == case.model_dump(exclude=volatile):
                 existing.processing.generation = new_gen  # same result: keep it, but advance the watermark
                 return app.state.store.save(existing)
-            human = any(e.actor != "system" for e in existing.audit)
+            start = max((i for i, e in enumerate(existing.audit) if e.event == SUPERSEDED), default=-1) + 1
+            human = any(e.actor != "system" for e in existing.audit[start:])  # current proposal only
             if human and case.processing.rules_version == existing.processing.rules_version:
                 return existing  # a human already acted and the rules did not change: frozen
             label = (SUPERSEDED if human else "neu verarbeitet (Regeln oder Leser geändert)")

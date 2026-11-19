@@ -6,7 +6,8 @@
         "httpMethod": "POST",
         "path": "schadenmeldung",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {},
+        "authentication": "headerAuth"
       },
       "id": "300175ef-be05-4c26-aec6-5d45c6838795",
       "name": "E-Mail eingegangen (E-mail received)",
@@ -16,7 +17,13 @@
         0,
         460
       ],
-      "webhookId": "3b445fcc-0208-442a-8bf4-ce9f0149c01a"
+      "webhookId": "3b445fcc-0208-442a-8bf4-ce9f0149c01a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "intakeWebhookTk1",
+          "name": "Intake Webhook Token"
+        }
+      }
     },
     {
       "parameters": {
@@ -580,7 +587,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify($json) }}",
+        "responseBody": "={{ JSON.stringify({ received: true, case_id: $json.case_id, status: $json.status, urgency: $json.urgency ? $json.urgency.level : null }) }}",
         "options": {}
       },
       "id": "ef1075ad-4f61-4a64-9342-faac78d8064e",

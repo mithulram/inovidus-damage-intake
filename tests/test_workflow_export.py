@@ -60,3 +60,13 @@ def test_http_nodes_retry_for_cold_starts():
     for n in WF["nodes"]:
         if n["type"] == "n8n-nodes-base.httpRequest":
             assert n.get("retryOnFail") and n["parameters"]["options"]["timeout"] >= 120000
+
+
+def test_webhook_requires_token_and_returns_only_a_receipt():
+    hook = NODES["E-Mail eingegangen (E-mail received)"]
+    assert hook["parameters"]["authentication"] == "headerAuth"
+    assert hook["credentials"]["httpHeaderAuth"]["id"]
+    resp = next(n for n in WF["nodes"] if n["type"] == "n8n-nodes-base.respondToWebhook")
+    body = resp["parameters"]["responseBody"]
+    for leak in ("match", "candidates", "audit", "prior_cases", "input"):
+        assert leak not in body

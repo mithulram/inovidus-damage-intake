@@ -23,8 +23,11 @@ npx n8n@2.48.5                                    # 2. n8n starten (Port 5678), 
 ```bash
 curl -s -X POST http://localhost:5678/webhook/schadenmeldung \
   -H 'Content-Type: application/json' \
+  -H "X-Webhook-Token: $N8N_WEBHOOK_TOKEN" \
   -d '{"subject":"Wasserschaden Küche, Musterstraße 12","body":"Hallo, seit gestern läuft Wasser unter unserer Spüle aus. Der Küchenunterschrank ist bereits aufgequollen. Wir wohnen in der Musterstr. 12, zweite Etage links. Bitte dringend jemanden schicken. Fotos sind vorhanden. Viele Grüße, Max Mustermann","provider":"offline"}'
 ```
+
+Ohne gültigen Token antwortet n8n mit **403**. Mit Token kommt nur eine kurze Quittung zurück (`case_id`, `status`, `urgency`) – den vollständigen Vorgang sieht man nur im (passwortgeschützten) Prüfplatz. Lokal: Zugangsdaten-Eintrag „Intake Webhook Token“ (Header `X-Webhook-Token`) in n8n anlegen.
 
 Der Vorgang erscheint danach im Prüfplatz unter **Posteingang → Prüfliste**. Optional im JSON: `"provider": "recorded"` oder `"groq"`, `"scenario_id": "S3"` (wendet die Daten-/Regeländerungen eines Testfalls an).
 
@@ -36,3 +39,7 @@ Die Dienst-Adresse steht im Knoten „E-Mail vorbereiten“ (`api_url`, Standard
 - Ausführungen: `../docs/screenshots/n8n_executions.webp`
 - Was „1 Verstehen“ liest und zurückgibt: `../docs/screenshots/n8n_node_verstehen.webp`
 - Zuordnung im Detail: `../docs/screenshots/n8n_node_zuordnung.webp`
+
+## English
+
+The workflow is the visible process: one node per step, each calling one step of the Python service; n8n only routes (`status`, `urgency.level`) and never approves. The webhook requires the header `X-Webhook-Token` (403 without it) and answers with a short receipt only. Hosted version: see `render.yaml` and `deploy/n8n/` – the owner account and the webhook credential are created from Render-generated secrets on every start.

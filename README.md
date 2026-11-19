@@ -20,6 +20,13 @@ uv run intake-ui           # Prüfplatz öffnen: http://127.0.0.1:8000
 Weitere Befehle: `uv run pytest` (alle Tests) · `uv run intake process scenarios/S01_original.yaml` (ein Fall als JSON).
 Mit KI: `.env.example` nach `.env` kopieren, `GROQ_API_KEY` eintragen, im Prüfplatz oben „Leser: Groq · live“ wählen. Ohne Schlüssel: „Groq · Aufzeichnung“ zeigt echte, aufgezeichnete Groq-Antworten.
 
+## Online-Demo (Render, kostenlos)
+
+`render.yaml` beschreibt zwei Dienste: den Prüfplatz (App + API) und n8n. Beide sind geschützt:
+- Prüfplatz: Passwort-Abfrage im Browser (Benutzername beliebig, Passwort = `INTAKE_ACCESS_PASSWORD`, von Render erzeugt).
+- n8n: eigenes Konto (wird beim Start aus Render-Geheimnissen angelegt); der Webhook braucht den Header `X-Webhook-Token`.
+- Kostenloser Tarif: nach Inaktivität schlafen die Dienste ein, der erste Aufruf dauert dann ca. 30–60 Sekunden. Gespeicherte Vorgänge werden bei einem Neustart zurückgesetzt (nur Testdaten).
+
 ## Was die Lösung mit der Beispiel-E-Mail macht
 
 | Schritt | Ergebnis |
@@ -86,4 +93,6 @@ A prototype that turns a tenant's damage-report email into a checked, explainabl
 
 Stack: Python 3.12, Pydantic, FastAPI, rapidfuzz, a hand-built review UI (no framework, offline), n8n 2.x for the visible workflow (one HTTP node per step, parity-tested against the single-call API). 14 business scenarios with exact expected outcomes, 550+ tests. All business rules live in `config/rules.yaml`.
 
-Run: `uv sync && uv run intake-scenarios && uv run intake-ui`.
+Run: `uv sync && uv run intake-scenarios && uv run intake-ui`. The UI has a language switch (Deutsch / English / English + Deutsch); English mode translates every system text, the tenant reply stays in the e-mail's language. English versions of all deliverables: [deliverables/en/](deliverables/en/).
+
+Hosted demo (Render free tier, `render.yaml`): app behind a generated password, n8n with an owner account and a token-protected webhook, both created from Render-generated secrets; services sleep when idle (first request ~30–60 s).

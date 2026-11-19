@@ -1,9 +1,12 @@
 #!/bin/sh
 # Start script for the hosted n8n (see Dockerfile). Required env: INTAKE_API_URL, INTAKE_SERVICE_TOKEN,
-# N8N_OWNER_EMAIL, N8N_OWNER_PASSWORD; PORT is provided by Render.
+# INTAKE_WEBHOOK_TOKEN, N8N_OWNER_EMAIL, N8N_OWNER_PASSWORD; PORT is provided by Render.
 set -e
 : "${INTAKE_API_URL:?INTAKE_API_URL missing}" "${N8N_OWNER_EMAIL:?missing}" "${N8N_OWNER_PASSWORD:?missing}"
 node /opt/intake/configure.mjs /opt/intake/workflow.json /tmp/workflow.json
+node /opt/intake/credentials.mjs /tmp/credentials.json
+n8n import:credentials --input=/tmp/credentials.json
+rm -f /tmp/credentials.json
 n8n import:workflow --input=/tmp/workflow.json
 n8n publish:workflow --id=iM8N72bLtuYUcMK3
 

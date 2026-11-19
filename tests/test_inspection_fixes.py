@@ -443,3 +443,20 @@ def test_incomplete_address_scores_zero(street, house):
     win = next(c for c in r.candidates if c.contract_id == "MV-10245")
     assert next(s for s in win.signals if s.name == "address").points == 0
     assert r.selected_contract is None and "threshold" in {g.value for g in r.failed_gates}
+
+
+# ---- round 9 ---------------------------------------------------------------
+
+# R9-03 – after a supersede, the new proposal is not "human-touched" by the old approvals
+def test_superseded_history_does_not_freeze_new_proposal(client, monkeypatch):
+    from intake.rules import load_rules as real_load
+    case = stored(client, "S1")
+    client.post("/api/approve", json={"case_id": case["case_id"], "actor": "A", "action": "approve_assignment",
+                                      "contract_id": "MV-10245"})
+    monkeypatch.setattr("intake.context.load_rules",
+                        lambda overrides=None, path=None: real_load(path, {**(overrides or {}), "match": {"threshold": 0.95}}))
+    sc = scenario("S1")
+    client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1", "store": True})  # supersedes
+    other_reader = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1", "store": True,
+                                                     "provider": "recorded"}).json()
+    assert other_reader["processing"]["provider"] == "recorded(groq)"  # newer result accepted, not frozen

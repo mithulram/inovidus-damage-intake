@@ -548,7 +548,9 @@ function bindCase() {
 async function adopt(cur, c) {
   let stored = await api(`/api/cases/${encodeURIComponent(c.case_id)}?allow_missing=true`);
   if (!stored) stored = await api("/api/cases", c);  // first action: put this proposal into the review inbox
-  const humanCount = (x) => (x.audit || []).filter((e) => e.actor !== "system").length;
+  // human actions on the CURRENT proposal (after the latest re-processing after a rule change)
+  const humanCount = (x) => { const a = x.audit || []; const r = a.map((e) => e.event.startsWith("neu verarbeitet (Regeln geändert)")).lastIndexOf(true);
+    return a.slice(r + 1).filter((e) => e.actor !== "system").length; };
   const gen = (x) => x.processing?.generation ?? 0;
   if (humanCount(stored) === 0 && gen(c) > gen(stored)) {
     stored = await api("/api/cases", c);  // this view is newer (e.g. rules changed) and nobody acted yet: refresh
