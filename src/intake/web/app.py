@@ -138,6 +138,8 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
     def store_case(case: CaseRecord) -> CaseRecord:
         if not sealer.verify(case):  # status, match, task … are trusted only as this server produced them
             raise HTTPException(409, TAMPERED)
+        if not pipeline.is_complete(case):  # an intermediate step result has no urgency, reply or task yet
+            raise HTTPException(422, "Vorgang ist noch nicht fertig verarbeitet – erst alle Schritte ausführen.")
         try:  # a completed proposal must have been built on today's rules and ERP data
             pipeline.check_versions(case, _context(scenario_id=case.processing.scenario_id))
         except pipeline.VersionMismatch as exc:

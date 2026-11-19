@@ -61,8 +61,9 @@ class AuditLog:
 def execute(case: CaseRecord, approval: Approval, audit: AuditLog) -> CaseRecord:
     if not isinstance(approval, Approval) or approval.case_id != case.case_id:
         raise PermissionError("Freigabe fehlt oder gehört zu einem anderen Vorgang")
-    if case.status is None or case.match is None:
-        raise PermissionError("Nur verarbeitete Vorgänge dürfen freigegeben werden")
+    if (case.status is None or case.match is None or case.processed_at is None
+            or None in (case.understanding, case.urgency, case.reply_draft, case.internal_task)):
+        raise PermissionError("Nur vollständig verarbeitete Vorgänge dürfen freigegeben werden")
     action = approval.action
     details = {"case_id": case.case_id, "contract_id": approval.contract_id,
                "reason": approval.reason, "simulated": True, "effect": SIMULATED}

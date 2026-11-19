@@ -285,6 +285,12 @@ class OfflineProvider:
                            default=0) + window
             if hit := negation.search(raw_text, boundary, place.start()):
                 alternatives.append(raw_text[hit.start():place.end()])
+            # … and later in the same clause: "2. OG links wohnen wir nicht mehr"
+            stop = re.compile(r"[.!?;:,\n]|\b(?:und|aber|sondern|denn|weil|dass|seit|and|but|because|since)\b",
+                              re.IGNORECASE).search(raw_text, place.end(), min(len(raw_text), place.end() + 80))
+            clause_end = stop.start() if stop else min(len(raw_text), place.end() + 80)
+            if hit := negation.search(raw_text, place.end(), clause_end):
+                alternatives.append(raw_text[place.start():hit.end()])
         # "Am Beispielweg 7": a preposition directly before the street may belong to its name. Capitalised
         # inside a sentence it does (street keeps it); otherwise the address is doubtful (review).
         street_override = None

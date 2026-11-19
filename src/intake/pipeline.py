@@ -46,10 +46,28 @@ def check_versions(case: CaseRecord, ctx: Context) -> None:
         raise VersionMismatch("Die ERP-Daten wurden seit der Verarbeitung geändert – bitte neu verarbeiten.")
 
 
+def last_step(case: CaseRecord) -> str | None:
+    return next((e.event.split(":", 1)[1] for e in reversed(case.audit) if e.event.startswith("schritt:")), None)
+
+
+def is_complete(case: CaseRecord) -> bool:
+    """Every step ran, in order, to the end – only such a record may enter the inbox or be acted on."""
+    return (case.processed_at is not None and last_step(case) == LAST_STEP
+            and None not in (case.understanding, case.match, case.status, case.urgency, case.reply_draft,
+                             case.internal_task))
+
+
 def run_step(name: str, case: CaseRecord, ctx: Context) -> CaseRecord:
     if name not in STEPS:
         raise KeyError(f"Unbekannter Schritt '{name}' (erlaubt: {', '.join(STEPS)})")
     check_versions(case, ctx)
+    order = list(STEPS)
+    expected = order[order.index(last_step(case)) + 1] if last_step(case) in order[:-1] else (
+        order[0] if last_step(case) is None else None)
+    if name != expected:
+        # steps run once, in order; re-running an earlier step would leave later results inconsistent
+        raise ValueError(f"Schritt '{name}' passt nicht – als Nächstes ist "
+                         f"{repr(expected) if expected else 'kein Schritt'} dran. Bitte neu verarbeiten.")
     case = STEPS[name](case, ctx)
     case.audit.append(AuditEvent(ts=ctx.now(), actor="system", event=f"schritt:{name}"))
     if name == LAST_STEP:

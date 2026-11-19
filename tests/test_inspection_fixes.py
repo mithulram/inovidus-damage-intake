@@ -735,3 +735,45 @@ def test_header_name_reaches_the_llm_message():
     from intake.providers.llm_schema import build_user_message
     msg = build_user_message(InboundEmail(body="x", sender_email="e@example.net", sender_display_name="Erika Muster"))
     assert "Erika Muster <e@example.net>" in msg
+
+
+# ---- round 16 --------------------------------------------------------------
+
+# R16-01 – negation after the place, in the same clause
+@pytest.mark.parametrize("text", ["In der Musterstraße 12, 2. OG links wohnen wir nicht mehr.",
+                                  "Musterstraße 12, zweite Etage links ist nicht unsere Wohnung."])
+def test_negation_after_place_forces_review(client, text):
+    case = _process(client, f"Wasser läuft aus der Spüle. {text} Viele Grüße, Max Mustermann")
+    assert case["status"] == "NEEDS_REVIEW" and case["match"]["selected_contract"] is None
+
+
+def test_negation_in_following_clause_does_not_block(client):
+    case = _process(client, "Musterstraße 12, zweite Etage links, und das Wasser läuft aus der Spüle und hört nicht auf. "
+                            "Viele Grüße, Max Mustermann")
+    assert case["status"] == "READY_FOR_APPROVAL" and case["match"]["selected_contract"] == "MV-10245"
+
+
+# R16-02 – only completely processed records enter the inbox or allow actions; steps run once, in order
+def test_partial_emergency_cannot_enter_inbox_or_be_acted_on(client):
+    sc = scenario("S5b")
+    case = client.post("/api/steps/understand", json={"email": sc["email"], "scenario_id": "S5b"}).json()
+    case = client.post("/api/steps/match", json={"case": case, "scenario_id": "S5b"}).json()
+    r = client.post("/api/cases", json=case)
+    assert r.status_code == 422 and "nicht fertig" in r.json()["detail"]
+    from intake.models import CaseRecord
+    partial = CaseRecord.model_validate(case)
+    with pytest.raises(PermissionError):
+        from intake.actions import Approval, execute
+        execute(partial, Approval(case_id=partial.case_id, actor="A", action="object_action"),
+                client.app.state.audit)
+
+
+def test_steps_cannot_be_rerun_out_of_order(client):
+    sc = scenario("S1")
+    body = {"email": sc["email"], "scenario_id": "S1"}
+    case = client.post("/api/steps/understand", json=body).json()
+    assert client.post("/api/steps/urgency", json={"case": case, "scenario_id": "S1"}).status_code == 422
+    for name in ("match", "prior_cases", "urgency", "draft", "task"):
+        case = client.post(f"/api/steps/{name}", json={"case": case, "scenario_id": "S1"}).json()
+    assert client.post("/api/steps/match", json={"case": case, "scenario_id": "S1"}).status_code == 422
+    assert client.post("/api/cases", json=case).status_code == 200
