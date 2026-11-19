@@ -79,7 +79,12 @@ def _floors(text: str, rules: Rules, start: int, end: int) -> list[re.Match]:
         re.IGNORECASE,
     )
     connector = r"(?:bzw\.(?!\w)|oder\b|or\b|bis\b|[-–—/])"
-    prefix_pattern = re.compile(rf"(?:{abbreviated.pattern}\s*{connector}\s*)+$", re.IGNORECASE)
+    # "und", "to" and commas join floors too ("zwischen 2. und 3. OG", "erste, zweite Etage"), but only
+    # after an operand that is clearly a floor (ordinal dot or word) – "Musterstr. 12, 2. OG" stays one floor.
+    strict = (r"(?:\d+\s*(?:st|nd|rd|th|\.)|(?:" + ordinals + r")|first|second|third|fourth|fifth)(?!\w)")
+    list_connector = r"(?:und\b|and\b|to\b|,)"
+    unit = rf"(?:{abbreviated.pattern}\s*{connector}\s*|\b{strict}\s*{list_connector}\s*)"
+    prefix_pattern = re.compile(rf"(?:{unit})+$", re.IGNORECASE)
     floors = []
     previous_end = start
     for floor in re.compile(pattern, re.IGNORECASE).finditer(text, start, end):

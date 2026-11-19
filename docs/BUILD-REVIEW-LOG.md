@@ -66,3 +66,7 @@ R11-01 approvals were not tied to the ERP data the reviewer saw · R11-02 an LLM
 ## Inspection 12 – full build (by Codex, fresh session, 247 s) – **Score 8/10, 1 finding**
 R11-01 and R11-03 confirmed fixed. R12-01: a floor range in words ("zweite bis dritte Etage", "EG, 2. OG") still became one floor. (The runner marked the run "code changed" only because this log was committed during the review; the finding was valid.)
 - Claude fixed it: the floor check now counts every floor the value names (digits, German ordinal words, English ordinals, ground-floor terms) and treats ranges ("bis", "zwischen") as alternatives; more than one → floor unclear + review. +12 regression tests, 863 tests, 14/14 scenarios.
+
+## Inspection 13 – full build (by Codex, fresh session, 265 s) – **Score 7/10, 3 findings**
+R13-01 the rules reader dropped a floor in "Zwischen 2. und 3. OG" / "erste, zweite Etage" (the R12 fix only covered values handed to matching) · R13-02 a record with an empty rules/ERP stamp skipped the version check · R13-03 "Mein Mietvertrag läuft aus … Kaution" became water damage.
+- Claude fixed all three: floor lists joined by "und"/comma are kept when the operand is clearly a floor ("Musterstr. 12, zweite Etage" stays one floor); records without both stamps are refused (409, re-process); "läuft"/"läuft aus" alone no longer count as damage ("läuft aus der/dem …" does). +10 regression tests, 873 tests, 14/14 scenarios.

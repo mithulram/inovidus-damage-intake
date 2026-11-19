@@ -562,3 +562,56 @@ def test_floor_range_in_words_forces_review(floor):
 def test_single_floor_still_definite(floor, expected):
     from intake.normalize import normalize_floor
     assert normalize_floor(floor, RULES.normalize)[:2] == (expected, "ok")
+
+
+# ---- round 13 --------------------------------------------------------------
+
+def _process(client, body: str, subject: str = "Schaden") -> dict:
+    return client.post("/api/process", json={"email": {"subject": subject, "body": body,
+                                                       "sender_email": "max.mustermann@example.org"}}).json()
+
+
+# R13-01 – the rules reader keeps every floor of a range or list
+@pytest.mark.parametrize("floor", ["Zwischen 2. und 3. OG rechts", "erste, zweite Etage links", "2. und 3. Etage links"])
+def test_offline_reader_keeps_floor_lists(client, floor):
+    case = _process(client, f"Wasser läuft aus der Spüle. Musterstraße 12. {floor}. Viele Grüße, Max Mustermann")
+    assert case["status"] == "NEEDS_REVIEW" and case["match"]["selected_contract"] is None
+    assert "unit_ambiguous" in case["match"]["failed_gates"]
+
+
+def test_house_number_before_floor_is_not_a_floor_list(client):
+    case = _process(client, "Wasser läuft aus der Spüle. Musterstraße 12, zweite Etage links. Viele Grüße, Max Mustermann")
+    assert case["status"] == "READY_FOR_APPROVAL" and case["match"]["selected_contract"] == "MV-10245"
+
+
+# R13-02 – a record without its rules/ERP basis is never trusted
+@pytest.mark.parametrize("field", ["rules_version", "erp_version"])
+@pytest.mark.parametrize("value", [None, ""])
+def test_unversioned_records_are_refused(client, field, value):
+    sc = scenario("S1")
+    case = client.post("/api/process", json={"email": sc["email"], "scenario_id": "S1"}).json()
+    case["processing"][field] = value
+    assert client.post("/api/cases", json=case).status_code == 409
+    assert client.post("/api/steps/match", json={"case": case, "scenario_id": "S1"}).status_code == 409
+    stored_case = stored(client, "S1")
+    stored_case = client.get(f"/api/cases/{stored_case['case_id']}").json()
+    stored_case["processing"][field] = value
+    _save(client, stored_case)
+    r = client.post("/api/approve", json={"case_id": stored_case["case_id"], "actor": "A",
+                                          "action": "approve_assignment", "contract_id": "MV-10245"})
+    assert r.status_code == 409 and "neu verarbeiten" in r.json()["detail"]
+
+
+# R13-03 – "läuft aus" without water context is not damage
+def test_contract_ending_question_is_not_water_damage(client):
+    case = _process(client, "Mein Mietvertrag läuft aus. Wie erhalte ich meine Kaution? Musterstr. 12, 2. OG links. "
+                            "Viele Grüße, Max Mustermann", subject="Frage zum Vertrag")
+    assert case["status"] == "OUT_OF_SCOPE"
+    assert case["understanding"]["classification"]["type"] == "ANFRAGE_MIETE"
+    assert case["urgency"]["level"] == "NORMAL"
+
+
+def test_real_leak_with_laeuft_aus_still_urgent(client):
+    case = _process(client, "Seit heute läuft aus dem Siphon unter der Spüle ständig Wasser. Musterstraße 12, zweite Etage "
+                            "links. Viele Grüße, Max Mustermann")
+    assert case["understanding"]["classification"]["type"] == "SCHADENMELDUNG" and case["urgency"]["level"] == "DRINGEND"

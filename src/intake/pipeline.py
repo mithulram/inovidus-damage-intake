@@ -37,9 +37,12 @@ class VersionMismatch(ValueError):
 
 def check_versions(case: CaseRecord, ctx: Context) -> None:
     erp_version = getattr(ctx.erp, "version", None)
-    if case.processing.rules_version and case.processing.rules_version != ctx.rules.version:
+    if not case.processing.rules_version or not case.processing.erp_version:
+        # never trust (or silently stamp) a record without its basis: it must be processed again
+        raise VersionMismatch("Der Vorgang nennt keinen Stand der Regeln und ERP-Daten – bitte neu verarbeiten.")
+    if case.processing.rules_version != ctx.rules.version:
         raise VersionMismatch("Die Regeln wurden während der Verarbeitung geändert – bitte neu verarbeiten.")
-    if case.processing.erp_version and erp_version and case.processing.erp_version != erp_version:
+    if case.processing.erp_version != erp_version:
         raise VersionMismatch("Die ERP-Daten wurden seit der Verarbeitung geändert – bitte neu verarbeiten.")
 
 

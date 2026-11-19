@@ -60,7 +60,7 @@ classification:
     SONSTIGES:
       keywords: []
       route_to: Kundenservice
-  damage_keywords: [schaden, wasser, undicht, kaputt, defekt, leck, tropft, läuft, rohr, schimmel, heizung, gas, strom, ausfall, verstopf, leak, leaking, broken, water, damage, flood, mould, mold, heating]
+  damage_keywords: [schaden, wasser, undicht, kaputt, defekt, leck, tropft, rohr, schimmel, heizung, gas, strom, ausfall, verstopf, leak, leaking, broken, water, damage, flood, mould, mold, heating]
   categories:                    # Reihenfolge = Priorität bei mehreren Treffern
     - name: Gasgeruch
       trade: Gas / Heizung
@@ -70,7 +70,7 @@ classification:
       keywords: [rohrbruch, "rohr geplatzt", "burst pipe", "pipe burst", "wasser kommt durch die decke", "water through the ceiling", "durch die decke"]
     - name: Wasserschaden
       trade: Sanitär
-      keywords: [wasserschaden, wasser, undicht, leck, tropft, "läuft aus", spüle, waschbecken, aufgequollen, feucht, water, leak, leaking, sink]
+      keywords: [wasserschaden, wasser, undicht, leck, tropft, "läuft aus der", "läuft aus dem", spüle, waschbecken, aufgequollen, feucht, water, leak, leaking, sink]
     - name: Rohrverstopfung
       trade: Sanitär
       keywords: [verstopft, verstopfung, rohrverstopfung, "läuft nicht ab", abfluss, clogged, blocked]
@@ -116,7 +116,7 @@ urgency:
       only_in_heating_season: true
     - level: DRINGEND
       label: Wasser tritt aus (Schaden schreitet fort)
-      any: ["läuft wasser", "wasser läuft", "läuft aus", "tritt aus", "läuft unter", "wasser unter", undicht, leck, "water leaking", "water is leaking", leaking, leak]
+      any: ["läuft wasser", "wasser läuft", "läuft aus der", "läuft aus dem", "tritt aus", "läuft unter", "wasser unter", undicht, leck, "water leaking", "water is leaking", leaking, leak]
     - level: DRINGEND
       label: Folgeschaden sichtbar
       any: [aufgequollen, durchfeuchtet, "feuchte wand", schimmel, swollen, mould, mold]
