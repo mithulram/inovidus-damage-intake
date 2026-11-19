@@ -74,6 +74,10 @@ def test_address_is_copied_as_written(rules, street, number, separator):
     ("Unbekannte Musterstraße 12", "Unbekannte Musterstraße"),
     ("Weitere Am Alten Musterweg 12", "Am Alten Musterweg"),
     ("Alte\tMusterstraße 12", "Alte\tMusterstraße"),
+    ("Alte\nMusterstraße 12", "Alte\nMusterstraße"),
+    ("Alte\r\nMusterstraße 12", "Alte\r\nMusterstraße"),
+    ("Alte\u00a0Musterstraße 12", "Alte\u00a0Musterstraße"),
+    ("Am\nAlten\nMusterweg 12", "Am\nAlten\nMusterweg"),
     ("alte Musterstraße 12", "alte Musterstraße"),
     ("Am alten Musterweg 3", "Am alten Musterweg"),
     ("am alten Musterweg 3", "am alten Musterweg"),
@@ -113,6 +117,7 @@ def test_function_words_before_bare_street_are_excluded_regardless_of_case(rules
 
 @pytest.mark.parametrize("address,street", [
     ("Alte Musterstraße 12", "Alte Musterstraße"),
+    ("Alte\nMusterstraße 12", "Alte\nMusterstraße"),
     ("alte Musterstraße 12", "alte Musterstraße"),
     ("Am Alten Musterweg 12", "Am Alten Musterweg"),
     ("Am alten Musterweg 3", "Am alten Musterweg"),
@@ -132,6 +137,101 @@ def test_different_multiword_street_vetoes_contract_and_object_action(address, s
     with pytest.raises(PermissionError, match="Gebäudeaktion"):
         execute(case, Approval(case_id=case.case_id, actor="Test", action="object_action"), audit)
     assert not audit.path.exists()
+
+
+@pytest.mark.parametrize("number,alternatives", [
+    ("12-14", ["14"]),
+    ("12–14", ["14"]),
+    ("12/14", ["14"]),
+    ("12, 14", ["14"]),
+    ("12 und 14", ["14"]),
+    ("12a-c", ["c"]),
+    ("12 - 14", ["14"]),
+    ("12—14", ["14"]),
+    ("12 bis 14", ["14"]),
+    ("12, 14 und 16", ["14", "16"]),
+    ("12a-c/14B, 016", ["c", "14B", "016"]),
+    ("12 und\n14", ["14"]),
+    ("12/12", ["12"]),
+    ("12, 14ab", ["14ab"]),
+    ("12 und 14.5", ["14.5"]),
+    ("12 + 14", ["14"]),
+    ("12 & 14", ["14"]),
+])
+@pytest.mark.parametrize("in_subject", [False, True])
+def test_complete_house_number_expressions_force_building_review(number, alternatives, in_subject, tmp_path):
+    location = f"Musterstraße {number}, 2. OG links"
+    email = InboundEmail(
+        subject=location if in_subject else "",
+        body="Wasser läuft aus. " + ("" if in_subject else location + ". ")
+             + "Viele Grüße, Max Mustermann",
+    )
+    case = process(email, Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    extraction = case.understanding.extraction
+    assert extraction.street_raw == "Musterstraße"
+    assert extraction.house_no == number
+    assert extraction.location_alternatives == alternatives
+    assert all(span in location for span in alternatives)
+    assert extraction.floor_raw == "2. OG"
+    assert extraction.side_raw == "links"
+    assert case.status == Status.NEEDS_REVIEW
+    assert Gate.UNIT_AMBIGUOUS in case.match.failed_gates
+    assert case.match.building_uncertain is True
+    assert case.match.selected_contract is None
+    assert case.match.object_id is None
+    assert case.internal_task.scope == "clarification"
+    assert case.internal_task.object_id is None
+    audit = AuditLog(tmp_path / "actions.jsonl")
+    with pytest.raises(PermissionError, match="Gebäudeaktion"):
+        execute(case, Approval(case_id=case.case_id, actor="Test", action="object_action"), audit)
+    assert not audit.path.exists()
+
+
+@pytest.mark.parametrize("number", ["12-", "12/foo", "12-14/", "12-14/foo", "12 / unbekannt"])
+def test_unparsed_house_number_tails_are_preserved_and_force_review(number):
+    case = process(InboundEmail(body=f"Wasser läuft aus. Musterstraße {number}, 2. OG links. "
+                                    "Viele Grüße, Max Mustermann"),
+                   Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.house_no == number
+    assert number in case.understanding.extraction.location_alternatives
+    assert case.status == Status.NEEDS_REVIEW
+    assert case.match.selected_contract is None
+    assert case.match.building_uncertain is True
+    assert case.match.object_id is None
+
+
+@pytest.mark.parametrize("number", ["12ab", "12.5", "12a2"])
+def test_unsupported_numeric_tokens_never_shorten_to_a_known_house_number(number):
+    case = process(InboundEmail(body=f"Wasser läuft aus. Musterstraße {number}, 2. OG links. "
+                                    "Viele Grüße, Max Mustermann"),
+                   Context.build(provider=OfflineProvider(), now=lambda: FIXED_NOW))
+    assert case.understanding.extraction.house_no == number
+    assert case.status == Status.NEEDS_REVIEW
+    assert case.match.selected_contract is None
+    assert case.match.object_id is None
+
+
+@pytest.mark.parametrize("number", ["12", "12a", "12 a"])
+@pytest.mark.parametrize("floor", ["2. OG", "2 OG", "2. Etage", "2nd floor"])
+def test_single_house_number_stays_intact_and_comma_before_floor_is_not_a_list(rules, number, floor):
+    extraction = OfflineProvider().understand(
+        InboundEmail(body=f"Musterstraße {number}, {floor} links"), rules,
+    ).extraction
+    assert extraction.house_no == number
+    assert extraction.floor_raw == floor
+    assert extraction.location_alternatives == []
+
+
+@pytest.mark.parametrize("body,subject", [
+    ("Alte", "Musterstraße 12, 2. OG links"),
+    ("Musterstraße 12", "und 14"),
+    ("Musterstraße", "12"),
+])
+def test_address_whitespace_never_joins_body_and_subject(rules, body, subject):
+    extraction = OfflineProvider().understand(InboundEmail(body=body, subject=subject), rules).extraction
+    assert extraction.street_raw == (None if body == "Musterstraße" else "Musterstraße")
+    assert extraction.house_no == (None if body == "Musterstraße" else "12")
+    assert extraction.location_alternatives == []
 
 
 @pytest.mark.parametrize("phrase,floor,status", [

@@ -16,14 +16,29 @@ _STREET_PREFIX = (
     r"(?!(?:wir|ich|der|die|das|dem|den|in|im|am|an|auf|zur|zum|bei|von|"
     r"wohnen|wohne|leben|adresse|anschrift|hallo|bitte|hilfe|notfall|außerdem|"
     r"achtung|dringend|wohnung|unsere|meine|hello|hi|help|urgent|we|at|live|the|address)\b)"
-    r"[A-ZÄÖÜa-zäöüß][\w-]*[ \t]+"
+    r"[A-ZÄÖÜa-zäöüß][\w-]*\s+"
+)
+# Preserve unfamiliar numeric tokens too; validation must never truncate an
+# unsupported suffix or decimal into a known building's house number.
+_HOUSE_NUMBER = r"\d+\w*(?:\.\d+\w*)*(?:[ \t]+[a-z])?(?!\w)"
+# A comma before a floor ("12, 2. OG") ends the house-number expression.
+# Letter endpoints stay literal: "12a-c" contributes "c", never an invented "12c".
+_HOUSE_NUMBER_EXTRA = (
+    rf"(?:{_HOUSE_NUMBER}|[a-z](?!\w))"
+    r"(?!\s*\.?\s*(?:Obergeschoss|Stockwerk|Etage|Stock|OG|floor)\b)"
+)
+_HOUSE_NUMBER_CONTINUATION = re.compile(
+    rf"\s*(?:[-–—/,+&]|und\b|oder\b|bis\b)\s*(?P<extra>{_HOUSE_NUMBER_EXTRA})", re.IGNORECASE,
 )
 _ADDRESS = re.compile(
     # "am" alone is a function word, but retain it before another prefix word
     # in names such as "Am alten Musterweg". Capture at most two prefix words.
-    rf"\b(?P<street>(?:(?:am[ \t]+|{_STREET_PREFIX})?{_STREET_PREFIX})?"
+    rf"\b(?P<street>(?:(?:am\s+|{_STREET_PREFIX})?{_STREET_PREFIX})?"
     r"[A-ZÄÖÜa-zäöüß][\w-]*?(?:straße|strasse|str\.?|weg|platz|allee|gasse|ring))"
-    r"\s*(?P<number>\d+(?:[ \t]?[a-z])?)\b", re.IGNORECASE,
+    rf"\s*(?P<number>{_HOUSE_NUMBER}(?:{_HOUSE_NUMBER_CONTINUATION.pattern})*"
+    # Preserve unsupported attached tails too, rather than reporting "12" for
+    # "12-" or "12/foo". They become literal uncertainty evidence below.
+    r"(?:[ \t]*[-–—/][ \t]*[^\s,;.!?]*)*)", re.IGNORECASE,
 )
 _LOCATION_REFERENCE = re.compile(
     r"\b(?:Etage|Stockwerk|Stock|Geschoss|Obergeschoss|Hausnummer|Hausnr\.?|Haus|Adresse|Anschrift|"
@@ -79,22 +94,16 @@ def _location_alternatives(
         return re.search(r"[.!?]", text[first.end():last.start()]) is None
 
     spans = []
-    # An omitted street still describes a different building. Keep the number
-    # verbatim so the matcher can recognise it as address uncertainty.
+    # The full house-number expression belongs to the address. Keep each extra
+    # endpoint verbatim as well, so the matcher treats the building as uncertain.
     for address in addresses:
-        end = address.end()
-        seen_numbers = {normalize_house_no(address.group("number"))}
-        source_end = body_end if address.start() < body_end else len(text)
-        while alternative := re.match(
-            r"\s*(?:oder\b|/)\s*(?P<number>\d+(?:[ \t]?[a-z])?)\b",
-            text[end:source_end], re.IGNORECASE,
-        ):
-            start, stop = alternative.span("number")
-            number = normalize_house_no(alternative.group("number"))
-            if number not in seen_numbers:
-                spans.append((end + start, end + stop))
-            seen_numbers.add(number)
-            end += alternative.end()
+        start, stop = address.span("number")
+        end = re.match(_HOUSE_NUMBER, text[start:stop], re.IGNORECASE).end() + start
+        while alternative := _HOUSE_NUMBER_CONTINUATION.match(text, end, stop):
+            spans.append(alternative.span("extra"))
+            end = alternative.end()
+        if end < stop:
+            spans.append((start, stop))
     # In "2. oder 3. OG" only the second floor has a complete suffix.
     # Both choices must survive as literal spans, without inventing "2. OG".
     for floor in floors:
@@ -213,7 +222,10 @@ class OfflineProvider:
         )
         # Prefer facts in the body; the subject remains a fallback source.
         raw_text = f"{email.body}\n{email.subject}"
-        addresses = list(_ADDRESS.finditer(raw_text))
+        # Whitespace inside an address may include newlines, but an address
+        # must never join a body prefix/number to text from the subject.
+        addresses = [*_ADDRESS.finditer(raw_text, 0, len(email.body)),
+                     *_ADDRESS.finditer(raw_text, len(email.body) + 1)]
         floors = _floors(raw_text, rules)
         address = addresses[0] if addresses else None
         floor = floors[0] if floors else None

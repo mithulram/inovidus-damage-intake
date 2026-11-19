@@ -42,3 +42,12 @@ R6-01 "Musterstr. 12; ich bin unsicher" still allowed a building action · R6-02
 ## Inspection 7 – full build (by Codex, fresh session, 249 s) – **Score 8/10, 2 findings**
 R7-01 "Alte Musterstraße 12" was read as "Musterstraße 12" → could become a wrong READY_FOR_APPROVAL · R7-02 after reassignment the unknown-sender flag and staff options could disagree.
 - Codex fixed R7-01 (WO7: multi-word street names; Claude added opener words like "Hilfe"/"Notfall" to the stoplist with tests). Claude fixed R7-02 (one consistent contact state for the approved contract, both directions tested). 637 tests.
+
+## Inspection 8 – full build (by Codex, fresh session) – **Score 8/10, 2 findings**
+R8-01 lowercase street prefix ("alte Musterstraße") dropped → Codex WO8 · R8-02 incomplete address earned half points (plan says 0) → Claude. (This run was marked "failed" by the runner only because docs/PLAN.md was changed by another session during the review; findings were valid.)
+
+## Takeover and §19 (19 Nov, ~00:55)
+A forked session had added plan §19 (Render hosting, full German/English) and a Codex review of it (R19-01..04). It handed over; this session built §19: translation layer + language switch, bilingual n8n, English deliverables, Render blueprint, n8n start script (rehearsed locally).
+
+## Inspection 9 – full build incl. §19 (by Codex, fresh session, 347 s) – **Score 7/10, 3 findings**
+R9-01 the n8n webhook was open and returned the full case → token-protected webhook + minimal receipt (Claude, rehearsed: 403 without token) · R9-02 "Musterstraße 12-14" and a prefix on the previous line were truncated → Codex WO9 · R9-03 superseded approvals still froze newer results → Claude. 785 tests.
