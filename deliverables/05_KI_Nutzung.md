@@ -13,8 +13,8 @@ Die Aufgabe erlaubt KI-Werkzeuge ausdrücklich. Ich habe sie bewusst intensiv ei
 
 ## Arbeitsweise: zwei KIs, gegenseitige Prüfung
 
-1. **Plan:** Claude schreibt den Plan, Codex bewertet ihn mit Punkten (0–10) und konkreten Fehlern. 9 Runden bis 10/10. Codex fand u. a.: ein inaktiver Vertrag hätte eine Unklarheit verstecken können; eine gesenkte Schwelle hätte ein anderes Gebäude „eindeutig“ machen können.
-2. **Bau:** Jedes Modul wird von der jeweils anderen KI geprüft. Codex fand im Claude-Code echte Fehler (z. B. eine gefälschte Freigabe konnte eingeschleust werden; eine Notfall-Formulierung konnte als „keine Schadenmeldung“ enden). Claude fand im Codex-Code z. B. falsche Treffer bei „oder“.
+1. **Plan:** Claude schreibt den Plan, Codex bewertet ihn mit Punkten (0–10) und konkreten Fehlern. Mehrere Runden bis 10/10. Codex fand u. a.: ein inaktiver Vertrag hätte eine Unklarheit verstecken können; eine gesenkte Schwelle hätte ein anderes Gebäude „eindeutig“ machen können.
+2. **Bau:** Jedes Modul wird von der jeweils anderen KI geprüft. Codex prüfte den Code in acht unabhängigen Runden und fand jedes Mal echte Fehler (z. B. eine gefälschte Freigabe konnte eingeschleust werden; Gas und Stromausfall ergaben widersprüchliche Sicherheitshinweise; ein langsamer alter Lauf konnte ein neueres Ergebnis überschreiben). Alle wurden mit Regressionstests behoben. Claude prüfte den Codex-Code ebenso (z. B. falsche Treffer bei „oder“).
 3. **Regeln für die KIs:** nie automatisch senden, Unsicherheit sichtbar machen, nur kostenlose Werkzeuge, Schlüssel nur in `.env`, Arbeitsschritte ehrlich protokollieren.
 
 ## Was ich selbst entschieden, geprüft oder angepasst habe
@@ -24,6 +24,7 @@ Die Aufgabe erlaubt KI-Werkzeuge ausdrücklich. Ich habe sie bewusst intensiv ei
 - Deutsche Etagen-Zählweise (EG = Erdgeschoss) und eine strenge Regel: fehlende oder unklare Etage → immer nachfragen.
 - Unbekannte Absenderadresse: nicht blockieren, sondern deutliche Warnung und drei Optionen für die Sachbearbeitung (antworten / von registrierter Adresse schreiben lassen / anrufen, nur wenn eine Nummer bekannt ist).
 - Eigene Oberfläche statt Streamlit, Fokus auf einen nachvollziehbaren Ablauf; n8n als sichtbarer Prozess.
+- Alles auf Deutsch **und** Englisch lesbar (Oberfläche, n8n, Unterlagen); Hosting auf Render.
 
 **Selbst geprüft:** *[Mithul: bitte vor dem Versand ehrlich ergänzen – z. B. „Plan gelesen und freigegeben“, „Testfälle S1–S10 in der Oberfläche durchgeklickt“, „Zuordnung der Beispiel-E-Mail nachgerechnet“, „Antworttexte sprachlich geprüft“, „n8n-Workflow ausgeführt“. Nur eintragen, was wirklich gemacht wurde.]*
 

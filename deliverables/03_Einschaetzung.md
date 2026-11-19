@@ -4,10 +4,10 @@
 
 - Die Original-E-Mail wird **MV-10245** zugeordnet (0,90 Punkte). MV-10487 wird mit Begründung ausgeschlossen („Etage widerspricht: 2. OG ≠ 3. OG“).
 - Die frühere „Rohrverstopfung Küche“ wird als **möglicher Zusammenhang** erkannt und landet in der internen Aufgabe – nicht in der Antwort an den Mieter.
-- **14 Testfälle** laufen automatisch (u. a. ohne Etage, Vertrag inaktiv, anderer Absender, Notfall Gas, Mietfrage, Englisch, gesenkte Schwelle). Alle verhalten sich wie erwartet. Insgesamt über 550 automatische Tests.
+- **14 Testfälle** laufen automatisch (u. a. ohne Etage, Vertrag inaktiv, anderer Absender, Notfall Gas, Mietfrage, Englisch, gesenkte Schwelle). Alle verhalten sich wie erwartet. Insgesamt über 700 automatische Tests, inklusive der Befunde aus acht unabhängigen Code-Prüfungen.
 - Ohne API-Schlüssel (Regelmodus) und mit Groq (live oder aufgezeichnet).
 - n8n-Workflow mit einem Knoten pro Schritt, echt ausgeführt; Ergebnis landet in der Prüfliste.
-- Oberfläche für Sachbearbeiter: Begründungen, Hausraster, Freigabe mit Stempel, Protokoll. **Es gibt keinen Senden-Knopf.**
+- Oberfläche für Sachbearbeiter auf Deutsch und Englisch: Begründungen, Hausraster, Freigabe mit Stempel, Protokoll. **Es gibt keinen Senden-Knopf.**
 
 ## Was noch nicht zuverlässig funktioniert
 
@@ -17,6 +17,7 @@
 - **Zeitangaben** („seit gestern“) werden nur als Text übernommen, nicht in ein Datum umgerechnet.
 - **Fotos/Anhänge** werden nicht ausgewertet.
 - Die Antworttexte sind Vorlagen; sie sind korrekt, aber noch nicht von einer Fachabteilung freigegeben.
+- Die englische Übersetzung der Systemtexte ist regelbasiert; KI-Freitext (Groqs eigene Begründung) bleibt deutsch und ist so gekennzeichnet.
 
 ## Risiken
 
@@ -28,6 +29,7 @@
 | Datenschutz (DSGVO) | nur erfundene Testdaten; an die KI geht nur der E-Mail-Text, nie ERP-Daten | EU-Hosting oder Vertrag zur Auftragsverarbeitung (AVV), Löschfristen, Rollen |
 | Groq ist ein US-Anbieter, kostenloser Tarif | nur für die Demo | EU-Modell (z. B. Azure OpenAI EU, Mistral) oder selbst gehostet |
 | Antwort mit falscher Zusage | Vorlagen statt freiem KI-Text; nie automatisch senden | Fachabteilung gibt Vorlagen frei |
+| Öffentlicher Demo-Link | Hosting mit Passwortschutz (siehe README) | Anmeldung und Rollen |
 
 ## Was für den produktiven Einsatz fehlt
 
