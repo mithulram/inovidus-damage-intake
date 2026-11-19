@@ -4,7 +4,7 @@
 
 - Die Original-E-Mail wird **MV-10245** zugeordnet (0,90 Punkte). MV-10487 wird mit Begründung ausgeschlossen („Etage widerspricht: 2. OG ≠ 3. OG“).
 - Die frühere „Rohrverstopfung Küche“ wird als **möglicher Zusammenhang** erkannt und landet in der internen Aufgabe – nicht in der Antwort an den Mieter.
-- **14 Testfälle** laufen automatisch (u. a. ohne Etage, Vertrag inaktiv, anderer Absender, Notfall Gas, Mietfrage, Englisch, gesenkte Schwelle). Alle verhalten sich wie erwartet. Insgesamt fast 900 automatische Tests, inklusive der Befunde aus 16 unabhängigen Code-Prüfungen durch Codex.
+- **14 Testfälle** laufen automatisch (u. a. ohne Etage, Vertrag inaktiv, anderer Absender, Notfall Gas, Mietfrage, Englisch, gesenkte Schwelle). Alle verhalten sich wie erwartet. Insgesamt 985 automatische Tests, inklusive der Befunde aus 18 unabhängigen Code-Prüfungen durch Codex.
 - Ohne API-Schlüssel (Regelmodus) und mit Groq (live oder aufgezeichnet).
 - n8n-Workflow mit einem Knoten pro Schritt, echt ausgeführt; Ergebnis landet in der Prüfliste.
 - Oberfläche für Sachbearbeiter auf Deutsch und Englisch: Begründungen, Hausraster, Freigabe mit Stempel, Protokoll. **Es gibt keinen Senden-Knopf.**

@@ -35,3 +35,10 @@ Note: rows overlap because Claude and Codex worked in parallel. Mithul's own tim
 | 2026-11-19 | 02:33 | 05:01 | – | Pause (usage limits); no work | – |
 | 2026-11-19 | 05:01 | 05:11 | Claude | Verified hosted services without credentials (401/403, no n8n setup page); live URLs in README | Extra |
 | 2026-11-19 | 05:11 | 06:17 | Codex → Claude | Inspection rounds 11–16 (8, 8, 7, 8, 7, 8 /10) and Claude's fixes after each (ERP fingerprint, compound/negated places, server seal, step order); redeploys on Render; checks through local n8n + browser. Codex usage limit again at 06:17 (resets 10:20) | Extra |
+| 2026-11-19 | 06:17 | 06:24 | Claude | Docs (DE/EN), explainer PDF | Extra |
+| 2026-11-19 | 07:01 | 07:18 | Claude (+ Mithul) | Own probing of the rules reader (3 gaps fixed, 79d202e); Mithul cancelled an old Render GitHub-app install page | Extra |
+| 2026-11-19 | 07:46 | 08:03 | Claude (+ Opus reviewer) | /claude-wr plan review (Mithul approved an Opus reviewer): 5 → 6 → 7 → 6 → 6, plan trimmed to 3 fixes after testing the examples | Extra |
+| 2026-11-19 | 08:03 | 10:22 | – | Waiting for Mithul's "go" / Codex reset | – |
+| 2026-11-19 | 10:22 | 10:30 | Codex → Claude | Inspection round 17 (8/10, 2 findings) from a separate worktree; Claude fixed both | Extra |
+| 2026-11-19 | 10:30 | 11:31 | – | Waiting for Mithul's "go" | – |
+| 2026-11-19 | 11:31 | 12:30 | Claude (+ Opus reviewer) + Codex | Built fixes A/B/C; build review 5 → 7 → 8 → 7 → 9 → 9; push 85a0731 + Render deploy; Codex round 18 (7/10, 4 findings) fixed (f1ce6ab) and deployed; final docs. Stop rule agreed: no further rounds | Extra |

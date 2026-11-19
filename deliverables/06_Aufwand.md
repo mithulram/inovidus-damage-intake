@@ -18,18 +18,18 @@ Nur die Zeilen, die im Timelog als **Core** markiert sind:
 
 Der Kern lag damit **deutlich unter 90 Minuten**. Meine eigene Zeit zum Lesen und Prüfen ist darin nicht enthalten.
 
-## 2. Gesamter Zeitraum und aktive Arbeitszeit (Stand 19.11.2026, 06:17)
+## 2. Gesamter Zeitraum und aktive Arbeitszeit (Stand 19.11.2026, 12:30)
 
 | Maß | Wert |
 |---|---|
-| Kalender-Zeitraum | 18.11.2026, 19:08 bis 19.11.2026, 06:17 |
-| davon **Wartezeit** (Nutzungsgrenzen erreicht, Pausen) | 22:00–00:17, 01:53–02:25 und 02:33–05:01 = ca. 5 h 13 min |
-| **Aktive Arbeitszeit** (KI-gestützt, ohne Wartezeit) | ca. **5 h 52 min** (19:08–22:00, 00:17–01:53, 02:25–02:33, 05:01–06:17) |
+| Kalender-Zeitraum | 18.11.2026, 19:08 bis 19.11.2026, ca. 12:30 |
+| davon **Wartezeit** (Nutzungsgrenzen erreicht, Pausen, Warten auf meine Freigabe) | ca. 9 h 45 min |
+| **Aktive Arbeitszeit** (KI-gestützt, ohne Wartezeit) | ca. **7 h 40 min** (19:08–22:00, 00:17–01:53, 02:25–02:33, 05:01–05:11, 05:24–06:24, 07:01–07:18, 07:46–08:03, 10:22–10:30, 11:31–12:30) |
 
 Alles außerhalb des Kerns ist im Timelog als **Extra** markiert:
 - meine Entscheidungen zu offenen Fragen und die Installation der Design-Werkzeuge (19:21–20:07),
 - Groq-Anbindung, API, Oberfläche, n8n-Workflow, Bildschirmfotos,
-- 16 unabhängige Code-Prüfungen durch Codex und die Korrekturen (die 17. Runde stoppte an der Codex-Nutzungsgrenze),
+- 18 unabhängige Code-Prüfungen durch Codex und die Korrekturen; dazwischen eigene Prüfrunden mit Claude (Plan 5 Runden, Umsetzung 6 Runden), als Codex an seiner Nutzungsgrenze war,
 - zweisprachige Oberfläche, n8n und Unterlagen (Deutsch/Englisch), Hosting auf Render,
 - Unterlagen und Beispiele.
 
