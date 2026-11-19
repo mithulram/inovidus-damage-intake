@@ -23,6 +23,7 @@ const state = {
   rules: null,
   actor: localGet("actor") || "Sachbearbeitung",
   tx: new Map(),        // German system text -> English (or null)
+  form: new Map(),      // case_id -> { contract, reason } typed by the reviewer (survives re-renders)
 };
 
 /* ------------------------------------------------------------------ language */
@@ -446,10 +447,12 @@ function actionBar(c, ap) {
     right = `<button class="btn primary ${c.urgency?.level === "NOTFALL" ? "alarm" : ""}" data-act="approve_assignment" data-contract="${esc(m.selected_contract)}">${esc(t("approveX", m.selected_contract))}</button>
       <span class="hint">${esc(t("approveHint"))}</span>`;
   } else {
-    const opts = (m.candidates || []).map((x) => `<option value="${esc(x.contract_id)}" ${x.contract_id === m.winner ? "selected" : ""}>${esc(x.contract_id)} · ${esc(x.unit_label)}${x.vetoes.length ? esc(t("contradicts")) : ""}${x.active ? "" : esc(t("inactiveOpt"))}</option>`).join("");
+    const saved = state.form.get(c.case_id) || {};
+    const pick = saved.contract || m.winner;
+    const opts = (m.candidates || []).map((x) => `<option value="${esc(x.contract_id)}" ${x.contract_id === pick ? "selected" : ""}>${esc(x.contract_id)} · ${esc(x.unit_label)}${x.vetoes.length ? esc(t("contradicts")) : ""}${x.active ? "" : esc(t("inactiveOpt"))}</option>`).join("");
     left = `<div class="manual">${actor}
         <label class="label">${esc(t("chooseContract"))}<select class="input" id="manual-contract">${opts}</select></label>
-        <label class="label" style="grid-column:1/-1">${esc(t("reasonReq"))}<textarea class="input" id="manual-reason" placeholder="${esc(t("reasonPh"))}"></textarea></label></div>`;
+        <label class="label" style="grid-column:1/-1">${esc(t("reasonReq"))}<textarea class="input" id="manual-reason" placeholder="${esc(t("reasonPh"))}">${esc(saved.reason || "")}</textarea></label></div>`;
     right = `${replyBtn}<button class="btn primary" data-act="approve_assignment" data-manual="1">${esc(t("approveManual"))}</button>
       <span class="hint">${esc(t("askFirst"))}</span>`;
     if (c.urgency?.level === "NOTFALL" && m.object_id && !m.building_uncertain && !ap.object) {
@@ -465,6 +468,11 @@ function actionBar(c, ap) {
 
 function renderCase(opts = {}) {
   const cur = state.current, view = $("#view-case");
+  // keep focus and caret of the field the reviewer is typing in across a re-render
+  const active = document.activeElement?.id;
+  const caret = active && document.activeElement.selectionStart;
+  queueMicrotask(() => { const el = active && document.getElementById(active);
+    if (el && el !== document.activeElement) { el.focus({ preventScroll: true }); if (caret != null && el.setSelectionRange) el.setSelectionRange(caret, caret); } });
   if (!cur) {
     view.innerHTML = `<div class="case"><div class="empty-state"><h3>${esc(t("pickH"))}</h3><p>${esc(t("pickP"))}</p></div></div>`;
     return;
@@ -530,6 +538,10 @@ function renderCase(opts = {}) {
 }
 
 function bindCase() {
+  const cid = state.current?.case?.case_id;
+  const keep = () => { if (cid) state.form.set(cid, { contract: $("#manual-contract")?.value, reason: $("#manual-reason")?.value }); };
+  $("#manual-contract")?.addEventListener("change", keep);
+  $("#manual-reason")?.addEventListener("input", keep);
   // linked hover: candidate row <-> flat in the building grid
   $$("[data-unit]").forEach((el) => {
     const on = () => $$(`[data-unit="${el.dataset.unit}"]`).forEach((x) => x.classList.add("hl"));
