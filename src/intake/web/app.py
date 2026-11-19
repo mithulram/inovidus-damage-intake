@@ -19,6 +19,7 @@ from .. import actions, pipeline
 from ..actions import Approval, AuditLog
 from ..context import Context
 from ..env import load_dotenv
+from ..i18n import translate_many
 from ..models import AuditEvent, CaseRecord, InboundEmail, ReplyDraft
 from ..providers import get_provider
 from ..rules import DEFAULT_RULES_PATH, load_rules
@@ -37,6 +38,10 @@ class ProcessRequest(RequestModel):
     provider: str | None = None
     scenario_id: str | None = None
     store: bool = False
+
+
+class TranslateRequest(RequestModel):
+    texts: list[str]
 
 
 class StepRequest(RequestModel):
@@ -232,6 +237,11 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             except PermissionError as exc:
                 raise HTTPException(403, str(exc)) from None
             return app.state.store.save(case)
+
+    @app.post("/api/translate")
+    def translate_texts(body: TranslateRequest):
+        """German system texts → English (deterministic, offline). Unknown text maps to null."""
+        return {"translations": translate_many(body.texts[:500])}
 
     @app.get("/api/audit")
     def audit_lines():
