@@ -324,6 +324,8 @@ table.cands { width: 100%; border-collapse: collapse; font-size: var(--fs-s); }
 .carbon-sheet::after { content: ""; position: absolute; left: 1.25rem; right: 1.25rem; bottom: 0.55rem; border-bottom: 1.5px dashed rgb(154 59 46 / 0.35); }
 .sheet-meta { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.15rem 0.6rem; font-size: var(--fs-s); margin-bottom: 0.7rem; }
 .letter { white-space: pre-wrap; line-height: 1.6; max-width: 70ch; color: var(--carbon-ink); }
+.reading-tr { margin-top: 1rem; padding: 0.75rem 0.9rem; background: var(--muted-wash); border-radius: 5px; border: 1px dashed var(--rule); }
+.reading-tr .letter { color: var(--ink-2); margin-top: 0.3rem; }
 .never-sent { display: inline-flex; align-items: center; gap: 0.35rem; font-size: var(--fs-xs); color: var(--ink-2); background: var(--muted-wash); padding: 0.15rem 0.5rem; border-radius: 3px; }
 .checklist { margin: 0.5rem 0 0; padding-left: 1.3rem; color: var(--carbon-ink); }
 .checklist li + li { margin-top: 0.25rem; }

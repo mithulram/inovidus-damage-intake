@@ -21,12 +21,13 @@ def route_to(case: CaseRecord, ctx: Context) -> str:
     return route.route_to if route else (fallback.route_to if fallback else "Kundenservice")
 
 
-def render_reply(case: CaseRecord, ctx: Context, variant: str | None = None) -> ReplyDraft:
+def render_reply(case: CaseRecord, ctx: Context, variant: str | None = None,
+                 language: str | None = None) -> ReplyDraft:
     if case.understanding is None or case.match is None or case.urgency is None or case.status is None:
         raise ValueError("Antwortentwurf braucht Verständnis, Zuordnung, Status und Dringlichkeit")
     if variant not in (None, "ask_registered_email"):
         raise ValueError(f"Unbekannte explizite Antwortvariante: {variant}")
-    language = case.understanding.extraction.language
+    language = language or case.understanding.extraction.language  # override = reading translation only
     templates = load_templates()
     texts = templates["reply"][language]
     translations = templates.get("translations", {}).get(language, {})

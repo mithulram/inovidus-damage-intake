@@ -24,6 +24,7 @@ const state = {
   actor: localGet("actor") || "Sachbearbeitung",
   tx: new Map(),        // German system text -> English (or null)
   form: new Map(),      // case_id -> { contract, reason } typed by the reviewer (survives re-renders)
+  replyEn: new Map(),   // reply body (German) -> English reading translation
 };
 
 /* ------------------------------------------------------------------ language */
@@ -399,6 +400,19 @@ function stampHtml(a, fresh) {
 
 const actionName = (ev) => ui().actions[ev] || ev;
 
+// English reading copy of a German reply (rendered from the English templates; never sent, never stored)
+function readingTranslation(c) {
+  const key = c.reply_draft.body;
+  if (!state.replyEn.has(key)) {
+    state.replyEn.set(key, null);
+    api("/api/reply-preview", { case: c, language: "en" })
+      .then((r) => { state.replyEn.set(key, r.body); if (state.current?.case === c) renderCase(); })
+      .catch(() => state.replyEn.delete(key));
+  }
+  const en = state.replyEn.get(key);
+  return en ? `<div class="reading-tr"><span class="label">${esc(t("readingTr"))}</span><div class="letter" lang="en">${esc(en)}</div></div>` : "";
+}
+
 function carbon(c, opts = {}) {
   const ap = approvals(c);
   const stamp = stampHtml(ap.assignment, opts.freshStamp);
@@ -409,6 +423,7 @@ function carbon(c, opts = {}) {
         <span class="label">${esc(t("subject"))}</span><span>${esc(r?.subject)}</span>
         <span class="label">${esc(t("language"))}</span><span>${esc(r?.language === "en" ? t("langEnEmail") : t("langDe"))}</span></div>
       <div class="letter" lang="${esc(r?.language || "de")}">${esc(r?.body)}</div>
+      ${state.lang !== "de" && r?.language === "de" ? readingTranslation(c) : ""}
       <p style="margin-top:.8rem"><span class="never-sent">${icon("mail")}${esc(t("neverSent"))}${r?.variant === "ask_registered_email" ? esc(t("variantReg")) : ""}</span>
       ${state.lang !== "de" ? `<span class="never-sent" style="margin-left:.4rem">${esc(t("replyLangNote"))}</span>` : ""}</p>`,
     task: tk ? `<div class="task-title">${X(tk.title)}</div>

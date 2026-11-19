@@ -47,6 +47,11 @@ class TranslateRequest(RequestModel):
     texts: list[str]
 
 
+class ReplyPreviewRequest(RequestModel):
+    case: CaseRecord
+    language: str = "en"
+
+
 class StepRequest(RequestModel):
     case: CaseRecord | None = None
     email: InboundEmail | None = None
@@ -225,6 +230,18 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             except ValueError:
                 raise HTTPException(422, "Ungültige Vorgangs-ID") from None
         return get_case(case_id)
+
+    @app.post("/api/reply-preview", response_model=ReplyDraft)
+    def reply_preview(body: ReplyPreviewRequest):
+        """The same reply in another language – for READING only (e.g. English for staff); never sent, never stored."""
+        if body.language not in ("de", "en"):
+            raise HTTPException(422, "language must be de or en")
+        variant = body.case.reply_draft.variant if body.case.reply_draft and body.case.reply_draft.variant == "ask_registered_email" else None
+        try:
+            return render_reply(body.case, _context(scenario_id=body.case.processing.scenario_id), variant=variant,
+                                language=body.language)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
 
     @app.get("/api/cases/{case_id}/reply", response_model=ReplyDraft)
     def reply(case_id: str, variant: str | None = None):

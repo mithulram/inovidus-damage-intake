@@ -41,3 +41,17 @@ def test_translate_endpoint():
     client = TestClient(create_app())
     r = client.post("/api/translate", json={"texts": ["Hausmeister informieren", "xyz"]}).json()
     assert r["translations"] == {"Hausmeister informieren": "Inform the caretaker", "xyz": None}
+
+
+def test_reply_preview_in_english_is_read_only(tmp_path):
+    from fastapi.testclient import TestClient
+    from intake.actions import AuditLog
+    from intake.store import CaseStore
+    from intake.web.app import create_app
+    from intake.scenarios import load_scenarios
+    c = TestClient(create_app(store=CaseStore(tmp_path / "c"), audit=AuditLog(tmp_path / "a.jsonl"), static_dir=tmp_path))
+    sc = next(s for s in load_scenarios() if s.id == "S1")
+    case = c.post("/api/process", json={"email": sc.email.model_dump(mode="json"), "scenario_id": "S1"}).json()
+    en = c.post("/api/reply-preview", json={"case": case, "language": "en"}).json()
+    assert en["language"] == "en" and en["body"].startswith("Hello") and en["auto_send"] is False
+    assert c.get("/api/cases").json() == []  # nothing stored
