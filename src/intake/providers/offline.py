@@ -274,12 +274,19 @@ class OfflineProvider:
         english = {"the", "is", "our", "we", "under", "and", "since", "please", "hello", "at", "in", "of"}
         german = {"der", "die", "das", "ist", "wir", "unter", "und", "seit", "bitte", "hallo", "in", "im", "von"}
         language = "en" if sum(t in english for t in tokens) > sum(t in german for t in tokens) else "de"
+        # A negated place ("2. OG, aber nicht links") must stay visible as doubt, never as a definite value.
+        negation = re.compile(r"\b(?:nicht|kein(?:e|em|en|er)?|not|no|außer|ausser|except)\s+"
+                              r"(?:(?:im|in|auf|der|die|das|dem|den|the|on|in\s+the)\s+)*$", re.IGNORECASE)
+        alternatives = _location_alternatives(raw_text, addresses, floors, sides, rules, len(email.body))
+        for place in [*addresses, *floors, *sides]:
+            if hit := negation.search(raw_text, max(0, place.start() - 40), place.start()):
+                alternatives.append(raw_text[hit.start():place.end()])
         extraction = Extraction(
             sender_name=sender_name, tenant_name=holder.group(1) if holder else sender_name,
             street_raw=address.group("street") if address else None,
             house_no=address.group("number") if address else None,
             floor_raw=floor.group(0) if floor else None, side_raw=side, room=room,
-            location_alternatives=_location_alternatives(raw_text, addresses, floors, sides, rules, len(email.body)),
+            location_alternatives=list(dict.fromkeys(alternatives)),
             damage_description=description,
             since=_raw(r"\b(?:seit\s+(?:gestern|heute(?:\s+(?:Morgen|Nacht))?)|since\s+yesterday)\b", email.body),
             photos_mentioned=bool(re.search(r"\b(?:Fotos?|Bilder|photos?)\b", text, re.IGNORECASE)),

@@ -16,7 +16,14 @@ from intake.store import CaseStore
 from intake.web.app import create_app
 
 SCENARIOS = load_scenarios()
-EXCLUDED = {"audit": True, "processed_at": True, "received_at": True, "processing": {"generation"}}  # per-run stamps
+EXCLUDED = {"audit": True, "processed_at": True, "received_at": True, "processing": {"generation", "signature"}}  # per-run stamps
+
+
+
+def reseal(client, case: dict) -> dict:
+    """Simulate a different, legitimately produced server result (the seal is the server's own)."""
+    from intake.models import CaseRecord
+    return client.app.state.sealer.seal(CaseRecord.model_validate(case)).model_dump(mode="json")
 
 
 @pytest.fixture
@@ -230,10 +237,10 @@ def test_restoring_a_changed_result_refreshes_until_a_human_acted(client):
     case = inbox(client)
     changed = dict(case, warnings=[*case["warnings"], "Regel geändert"], processed_at="2099-01-01T00:00:00Z",
                    processing={**case["processing"], "generation": (case["processing"]["generation"] or 0) + 1})
-    refreshed = client.post("/api/cases", json=changed).json()
+    refreshed = client.post("/api/cases", json=reseal(client, changed)).json()
     assert refreshed["warnings"][-1] == "Regel geändert"
     assert refreshed["audit"][-1]["event"].startswith("neu verarbeitet")
     approved = client.post("/api/approve", json={"case_id": case["case_id"], "actor": "Test",
                                                  "action": "approve_reply"}).json()
-    frozen = client.post("/api/cases", json=dict(changed, warnings=["noch einmal geändert"])).json()
+    frozen = client.post("/api/cases", json=reseal(client, dict(changed, warnings=["noch einmal geändert"]))).json()
     assert frozen["warnings"] == approved["warnings"]

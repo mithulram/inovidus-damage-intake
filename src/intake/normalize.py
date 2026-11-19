@@ -45,6 +45,8 @@ def normalize_house_no(house_no: str | None) -> str | None:
 # "Nr. 12/14"). Any provider (rules, Groq, recorded) can return such a value – it is never definite.
 _ALTERNATIVE = re.compile(r"\b(bzw|beziehungsweise|oder|or|und|and|evtl|eventuell|vielleicht|wahrscheinlich|maybe|either"
                           r"|entweder|ca|circa|bis|zwischen|to|between)\b|/|&|\?|\.\.\.")
+# "nicht links", "kein EG", "not the 2nd floor": a negated place is never a definite place.
+_NEGATION = re.compile(r"\b(nicht|kein|keine|keinem|keinen|keiner|not|no|ausser|except|sondern)\b")
 _NUMBER_RANGE = re.compile(r"\d+\s*[a-z]?\s*[-–,+]\s*\d+")
 
 
@@ -65,7 +67,7 @@ def compound_location(raw: str | None, field: str, rules: NormalizeRules | None 
     if not raw or not raw.strip():
         return False
     text = fold(raw)
-    if _ALTERNATIVE.search(text) or _NUMBER_RANGE.search(text):
+    if _ALTERNATIVE.search(text) or _NUMBER_RANGE.search(text) or _NEGATION.search(text):
         return True
     if field == "floor":
         return len(_floor_mentions(text, rules)) > 1 if rules is not None else len(set(re.findall(r"\d+", text))) > 1

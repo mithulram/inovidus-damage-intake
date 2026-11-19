@@ -273,7 +273,8 @@ class Processing(Strict):
     fallback_used: bool = False
     scenario_id: str | None = Field(None, description="Nur Demo: Testfall, dessen Daten-/Regeländerungen galten")
     erp_version: str | None = Field(None, description="Fingerabdruck der ERP-Daten, mit denen entschieden wurde")
-    generation: int | None = Field(None, description="Server-Zeitstempel (ns) beim START der Verarbeitung – neuere Läufe gewinnen")
+    generation: int | None = Field(None, description="Server-Zeitstempel (µs) beim START der Verarbeitung – neuere Läufe gewinnen")
+    signature: str | None = Field(None, description="Server-Siegel (HMAC) – nur unveränderte Vorschläge dieses Servers zählen")
 
 
 # ---------------------------------------------------------------------------

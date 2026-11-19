@@ -27,6 +27,7 @@ from ..models import AuditEvent, CaseRecord, InboundEmail, ReplyDraft
 from ..providers import get_provider
 from ..rules import DEFAULT_RULES_PATH, load_rules
 from ..scenarios import load_scenarios
+from ..seal import Sealer
 from ..steps import STEPS
 from ..steps.draft import render_reply
 from ..store import CaseStore
@@ -66,6 +67,11 @@ class ApproveRequest(Approval):
     option: str | None = None
     scenario_id: str | None = None  # ignored: the stored case remembers its own processing context
     revision: int | None = None     # number of audit events the client saw; mismatch = stale view
+
+
+def _now_us() -> int:
+    """Generation stamp in microseconds: stays exact in JavaScript (n8n, browser), unlike nanoseconds."""
+    return time.time_ns() // 1000
 
 
 def _context(provider: str | None = None, scenario_id: str | None = None) -> Context:
@@ -110,6 +116,11 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
         return PlainTextResponse("Anmeldung erforderlich / Login required", status_code=401,
                                  headers={"WWW-Authenticate": 'Basic realm="Schadenmeldungen-Demo", charset="UTF-8"'})
     app.state.store = store if store is not None else CaseStore()
+    app.state.sealer = sealer = Sealer()
+    TAMPERED = "Der Vorgang stammt nicht unverändert von diesem Server – bitte neu verarbeiten."
+
+    def save(case: CaseRecord) -> CaseRecord:
+        return app.state.store.save(sealer.seal(case))
     app.state.audit = audit if audit is not None else AuditLog()
     static = Path(static_dir) if static_dir is not None else Path(__file__).parent / "static"
 
@@ -125,6 +136,8 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
     lock = threading.RLock()  # serialises every read-modify-write of a stored case
 
     def store_case(case: CaseRecord) -> CaseRecord:
+        if not sealer.verify(case):  # status, match, task … are trusted only as this server produced them
+            raise HTTPException(409, TAMPERED)
         try:  # a completed proposal must have been built on today's rules and ERP data
             pipeline.check_versions(case, _context(scenario_id=case.processing.scenario_id))
         except pipeline.VersionMismatch as exc:
@@ -146,16 +159,18 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
         label = "in Prüfliste übernommen"
         if existing is not None:
             old_gen, new_gen = existing.processing.generation, case.processing.generation
+            if old_gen is not None and old_gen > 10**17:
+                old_gen //= 1000  # records from before the switch to microseconds stored nanoseconds
             if old_gen is not None:
                 newer = new_gen is not None and new_gen > old_gen
             else:
                 newer = bool(case.processed_at and (existing.processed_at is None or case.processed_at > existing.processed_at))
             if not newer:
                 return existing  # a run that STARTED earlier never overwrites a newer one, however late it finishes
-            volatile = {"audit": True, "processed_at": True, "received_at": True, "processing": {"generation"}}
+            volatile = {"audit": True, "processed_at": True, "received_at": True, "processing": {"generation", "signature"}}
             if existing.model_dump(exclude=volatile) == case.model_dump(exclude=volatile):
                 existing.processing.generation = new_gen  # same result: keep it, but advance the watermark
-                return app.state.store.save(existing)
+                return save(existing)
             start = max((i for i, e in enumerate(existing.audit) if is_supersede(e.event)), default=-1) + 1
             human = any(e.actor != "system" for e in existing.audit[start:])  # current proposal only
             same_basis = (case.processing.rules_version == existing.processing.rules_version
@@ -172,7 +187,7 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             case.audit = [*existing.audit, event]
         else:
             case.audit.append(event)
-        app.state.store.save(case)
+        save(case)
         app.state.audit.append(event)
         return case
 
@@ -195,9 +210,10 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
 
     @app.post("/api/process", response_model=CaseRecord)
     def process(body: ProcessRequest):
-        generation = time.time_ns()  # taken BEFORE the (possibly slow) reader runs
+        generation = _now_us()  # taken BEFORE the (possibly slow) reader runs
         case = pipeline.process(body.email, _context(body.provider, body.scenario_id), body.scenario_id)
         case.processing.generation = generation
+        sealer.seal(case)
         return store_case(case) if body.store else case
 
     @app.post("/api/steps/{name}", response_model=CaseRecord)
@@ -206,13 +222,15 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
             raise HTTPException(404, f"Unbekannter Schritt '{name}' (erlaubt: {', '.join(STEPS)})")
         ctx = _context(body.provider, body.scenario_id)
         case = body.case
+        if case is not None and not sealer.verify(case):
+            raise HTTPException(409, TAMPERED)
         if case is None:
             if name != "understand" or body.email is None:
                 raise HTTPException(422, "Vorgang fehlt; 'understand' braucht mindestens eine E-Mail")
             case = pipeline.new_case(body.email, ctx, body.scenario_id)
-            case.processing.generation = time.time_ns()
+            case.processing.generation = _now_us()
         try:
-            return pipeline.run_step(name, case, ctx)
+            return sealer.seal(pipeline.run_step(name, case, ctx))
         except pipeline.VersionMismatch as exc:
             raise HTTPException(409, str(exc)) from None
         except ValueError as exc:
@@ -291,7 +309,7 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
                 case = actions.execute(case, approval, app.state.audit)
             except PermissionError as exc:
                 raise HTTPException(403, str(exc)) from None
-            return app.state.store.save(case)
+            return save(case)
 
     @app.post("/api/translate")
     def translate_texts(body: TranslateRequest):
