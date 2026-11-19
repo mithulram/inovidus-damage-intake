@@ -13,3 +13,5 @@ Format: what the AI did → what Mithul checked or changed. Mithul fills the rig
 | 2026-11-18 | Claude Code | Inspected Codex's code (WO1–WO4): 2 spec gaps, 2 text issues, 1 false-positive defect found and fixed via Codex | _open_ |
 | 2026-11-18 | Claude Code (browser) | Created the Groq API key "inovidus-damage-intake" in Mithul's browser (with his permission), stored only in .env | _open_ |
 | 2026-11-18 | Groq (openai/gpt-oss-120b) | Product LLM: read 5 demo emails (recorded in examples/llm_recorded/) | _open_ |
+| 2026-11-19 | Claude Code (Opus 5.5) | Took over §19 from a forked session: German→English translation layer, UI language switch, bilingual n8n, English deliverables, Render hosting (blueprint, n8n bootstrap, access protection), fixes for Codex inspection rounds 5–10 | _open_ |
+| 2026-11-19 | Codex CLI (gpt-6.1-sol) | Inspection rounds 5–10 (scores 7, 7, 8, 8, 7, 7); built reader fixes WO6–WO10 (WO10 cut off by usage limit, result inspected and proved by Claude) | _open_ |

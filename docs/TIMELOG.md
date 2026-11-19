@@ -30,3 +30,4 @@ Note: rows overlap because Claude and Codex worked in parallel. Mithul's own tim
 | 2026-11-19 | 00:17 | 00:29 | Codex → Claude | Inspection round 5 (7/10, 3 findings); fixes by Claude + Codex WO6 | Extra |
 | 2026-11-19 | 00:29 | 00:36 | Codex → Claude | Inspection round 6 (7/10, 5 findings); Claude fixes | Extra |
 | 2026-11-19 | 00:45 | 00:46 | Codex → Claude | Inspection round 7 (8/10, 2 findings); fixes (Claude + Codex WO7) | Extra |
+| 2026-11-19 | 00:50 | 02:00 | Claude (+ Codex WO8–WO10, inspections 8–10) | Takeover from forked session; §19: translation layer + language switch, bilingual n8n, English deliverables, Render blueprint + n8n start script (rehearsed), webhook token; fixes for rounds 8–10; screenshots. Codex usage limit again at ~01:45 (resets 05:17) | Extra |
