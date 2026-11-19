@@ -24,13 +24,13 @@ def _chain_from(start: str) -> list[str]:
 
 
 def test_step_nodes_call_every_step_in_pipeline_order():
-    urls = [NODES[n]["parameters"].get("url", "") for n in _chain_from("E-Mail eingegangen")]
+    urls = [NODES[n]["parameters"].get("url", "") for n in _chain_from("E-Mail eingegangen (E-mail received)")]
     called = [m.group(1) for u in urls if (m := re.search(r"/api/steps/(\w+)", u))]
     assert called == list(STEPS)
 
 
 def test_inbound_metadata_is_passed_through():
-    prep = json.dumps(NODES["E-Mail vorbereiten"]["parameters"])
+    prep = json.dumps(NODES["E-Mail vorbereiten (Prepare e-mail)"]["parameters"])
     for key in ("subject", "body", "sender_email", "message_id", "received_at", "attachments"):
         assert key in prep
 
@@ -43,6 +43,20 @@ def test_workflow_never_approves_sends_or_holds_secrets():
 
 
 def test_branches_read_only_status_and_urgency():
-    for name in ("Notfall?", "Status?"):
+    for name in ("Notfall? (Emergency?)", "Status? (Status?)"):
         exprs = re.findall(r"\$json\.([\w.]+)", json.dumps(NODES[name]["parameters"]))
         assert set(exprs) <= {"status", "urgency.level"}
+
+
+def test_every_node_is_bilingual():
+    for n in WF["nodes"]:
+        if n["type"] == "n8n-nodes-base.stickyNote":
+            assert "*EN:" in n["parameters"]["content"], n["name"]
+        else:
+            assert "(" in n["name"] and n["name"].rstrip().endswith(")"), n["name"]
+
+
+def test_http_nodes_retry_for_cold_starts():
+    for n in WF["nodes"]:
+        if n["type"] == "n8n-nodes-base.httpRequest":
+            assert n.get("retryOnFail") and n["parameters"]["options"]["timeout"] >= 120000

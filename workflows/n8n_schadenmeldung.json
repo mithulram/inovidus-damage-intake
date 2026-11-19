@@ -5,11 +5,11 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "schadenmeldung",
-        "responseMode": "lastNode",
+        "responseMode": "responseNode",
         "options": {}
       },
       "id": "300175ef-be05-4c26-aec6-5d45c6838795",
-      "name": "E-Mail eingegangen",
+      "name": "E-Mail eingegangen (E-mail received)",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
@@ -25,7 +25,7 @@
         "options": {}
       },
       "id": "585f377e-f775-4572-8933-1c70a49cd9ef",
-      "name": "Postfach (Produktion, aus)",
+      "name": "Postfach – Produktion, aus (Mailbox – production, off)",
       "type": "n8n-nodes-base.emailReadImap",
       "typeVersion": 2,
       "position": [
@@ -69,7 +69,7 @@
         "options": {}
       },
       "id": "509f45d4-0144-4a1e-a92d-2e4f8c6361d1",
-      "name": "E-Mail vorbereiten",
+      "name": "E-Mail vorbereiten (Prepare e-mail)",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
@@ -80,122 +80,140 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/understand' }}",
+        "url": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_url + '/api/steps/understand' }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ email: $json.email, provider: $json.provider, scenario_id: $json.scenario_id || null }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 120000
         }
       },
       "id": "21539838-ce09-4d91-a4bd-e87a9a8b50bb",
-      "name": "1 Verstehen (KI oder Regeln)",
+      "name": "1 Verstehen (Understand – AI or rules)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         560,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/match' }}",
+        "url": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_url + '/api/steps/match' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 120000
         }
       },
       "id": "e8a6298a-1380-4e7f-894b-f989f4857246",
-      "name": "2 Zuordnung im ERP",
+      "name": "2 Zuordnung (Matching)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         880,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/prior_cases' }}",
+        "url": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_url + '/api/steps/prior_cases' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 120000
         }
       },
       "id": "f3bd09ab-34e8-4436-a775-464aa9ade2d9",
-      "name": "3 Frühere Vorgänge",
+      "name": "3 Frühere Vorgänge (Earlier cases)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1120,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/urgency' }}",
+        "url": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_url + '/api/steps/urgency' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 120000
         }
       },
       "id": "acf1ca13-a426-4329-92d7-929df9c91bad",
-      "name": "4 Dringlichkeit",
+      "name": "4 Dringlichkeit (Urgency)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1440,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/draft' }}",
+        "url": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_url + '/api/steps/draft' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 120000
         }
       },
       "id": "078122ec-0614-4342-a03b-5f27946821da",
-      "name": "5 Antwortentwurf (nie senden)",
+      "name": "5 Antwortentwurf – nie senden (Reply draft – never sent)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1680,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/steps/task' }}",
+        "url": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_url + '/api/steps/task' }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten').item.json.provider, scenario_id: $('E-Mail vorbereiten').item.json.scenario_id || null }) }}",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
-          "timeout": 60000
+          "timeout": 120000
         }
       },
       "id": "be24ebb0-4af9-4cdc-b060-3ae5518d9451",
-      "name": "6 Interne Aufgabe",
+      "name": "6 Interne Aufgabe (Internal task)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1920,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
@@ -222,7 +240,7 @@
         "options": {}
       },
       "id": "d8063bf9-83ac-4ad3-b31b-71d308275c32",
-      "name": "Notfall?",
+      "name": "Notfall? (Emergency?)",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
@@ -233,7 +251,7 @@
     {
       "parameters": {},
       "id": "27dc0e85-b56b-4afd-ac92-b6b77ded3851",
-      "name": "Bereitschaft alarmieren (Produktion: SMS)",
+      "name": "Bereitschaft alarmieren – Produktion (Alert on-call – production)",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -323,7 +341,7 @@
         "options": {}
       },
       "id": "2fa54b8a-b8a1-44c5-a036-5c412006a34c",
-      "name": "Status?",
+      "name": "Status? (Status?)",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.2,
       "position": [
@@ -334,7 +352,7 @@
     {
       "parameters": {},
       "id": "41d9b40f-4d45-46d1-a21e-c05bb7020ed2",
-      "name": "Vorschlag zur Freigabe",
+      "name": "Vorschlag zur Freigabe (Proposal for approval)",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -345,7 +363,7 @@
     {
       "parameters": {},
       "id": "9d08ee5f-ba9c-4f2e-b192-61da94ce769e",
-      "name": "Rückfrage vorbereitet",
+      "name": "Rückfrage vorbereitet (Question prepared)",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -356,7 +374,7 @@
     {
       "parameters": {},
       "id": "db063e4d-611d-44ba-aa90-d1b009915358",
-      "name": "An Fachstelle weiterleiten",
+      "name": "An Fachstelle weiterleiten (Forward to team)",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
@@ -367,27 +385,30 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $('E-Mail vorbereiten').item.json.api_url + '/api/cases' }}",
+        "url": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_url + '/api/cases' }}",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "timeout": 30000
+          "timeout": 120000
         }
       },
       "id": "87a15cfc-0150-4c11-ada6-496c4cfa7cd2",
-      "name": "In Prüfliste ablegen",
+      "name": "In Prüfliste ablegen (Store in review list)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         3000,
         460
-      ]
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
     },
     {
       "parameters": {
-        "content": "# Schadenmeldung – KI-gestützte Erfassung\nEine E-Mail läuft durch **sechs feste Schritte**; jeder Knoten ruft genau einen Schritt im Python-Dienst auf (`/api/steps/…`).\n**n8n leitet nur weiter – entschieden wird im Dienst nach `config/rules.yaml`.** Gehandelt wird erst nach menschlicher Freigabe im Prüfplatz (http://127.0.0.1:8000).",
-        "height": 220,
+        "content": "# Schadenmeldung – KI-gestützte Erfassung\nEine E-Mail läuft durch **sechs feste Schritte**; jeder Knoten ruft genau einen Schritt im Python-Dienst auf (`/api/steps/…`). **n8n leitet nur weiter – entschieden wird im Dienst nach `config/rules.yaml`.** Gehandelt wird erst nach menschlicher Freigabe im Prüfplatz.\n\n*EN: Damage report – AI-assisted intake. An e-mail runs through **six fixed steps**; each node calls exactly one step of the Python service. **n8n only routes – the service decides by `config/rules.yaml`.** Nothing happens until a person approves it in the review desk.*",
+        "height": 280,
         "width": 1180,
         "color": 4
       },
@@ -402,8 +423,8 @@
     },
     {
       "parameters": {
-        "content": "## Eingang\nDemo: Webhook (JSON mit subject, body, sender_email).\nProduktion: Postfach (IMAP / Microsoft 365) – hier absichtlich aus.\n„E-Mail vorbereiten“ enthält die Dienst-Adresse `api_url`.",
-        "height": 620,
+        "content": "## Eingang\nDemo: Webhook (JSON mit subject, body, sender_email). Produktion: Postfach (IMAP / Microsoft 365) – hier absichtlich aus. „E-Mail vorbereiten“ enthält die Dienst-Adresse `api_url`.\n\n*EN: Incoming. Demo: webhook (JSON with subject, body, sender_email). Production: mailbox node – switched off on purpose. “Prepare e-mail” holds the service address `api_url`.*",
+        "height": 680,
         "width": 500,
         "color": 7
       },
@@ -418,8 +439,8 @@
     },
     {
       "parameters": {
-        "content": "## 1 Lesen\nDie KI (Groq) liest nur: Art, Schadenart, Fakten, Dringlichkeits-Hinweis.\nSchlüssel bleibt im Dienst. Ohne Schlüssel: Regelmodus.",
-        "height": 520,
+        "content": "## 1 Lesen\nDie KI (Groq) liest nur: Art, Schadenart, Fakten, Dringlichkeits-Hinweis. Schlüssel bleibt im Dienst. Ohne Schlüssel: Regelmodus.\n\n*EN: 1 Read. The AI (Groq) only reads: type, damage type, facts, urgency hint. The key stays in the service. Without a key: rule mode.*",
+        "height": 580,
         "width": 300,
         "color": 6
       },
@@ -434,8 +455,8 @@
     },
     {
       "parameters": {
-        "content": "## 2–3 Zuordnen – feste Regeln\nPunkte je Merkmal · Widerspruch = Veto · Schwelle · Abstand · Vertrag aktiv?\nUnklar → **Prüfung nötig**. Die KI wählt nie den Vertrag. Dazu frühere Vorgänge derselben Einheit.",
-        "height": 520,
+        "content": "## 2–3 Zuordnen – feste Regeln\nPunkte je Merkmal · Widerspruch = Veto · Schwelle · Abstand · Vertrag aktiv? Unklar → **Prüfung nötig**. Die KI wählt nie den Vertrag. Dazu frühere Vorgänge derselben Einheit.\n\n*EN: 2–3 Match – fixed rules. Points per signal · contradiction = veto · threshold · gap · contract active? Unclear → **review needed**. The AI never picks the contract. Plus earlier cases of the same unit.*",
+        "height": 580,
         "width": 560,
         "color": 5
       },
@@ -450,8 +471,8 @@
     },
     {
       "parameters": {
-        "content": "## 4–6 Einstufen und vorbereiten\nDringlichkeit: Regeln setzen die Untergrenze, die KI darf nur erhöhen.\nAntwort und Aufgabe werden **nur entworfen – nie gesendet**.",
-        "height": 520,
+        "content": "## 4–6 Einstufen und vorbereiten\nDringlichkeit: Regeln setzen die Untergrenze, die KI darf nur erhöhen. Antwort und Aufgabe werden **nur entworfen – nie gesendet**.\n\n*EN: 4–6 Rate and prepare. Urgency: rules set the minimum, the AI may only raise it. Reply and task are **drafted only – never sent**.*",
+        "height": 580,
         "width": 780,
         "color": 3
       },
@@ -466,8 +487,8 @@
     },
     {
       "parameters": {
-        "content": "## Weiterleiten\nn8n liest nur `status` und `urgency.level`.\nAlles landet in der Prüfliste; Notfälle stehen dort oben. `/api/approve` ruft n8n **nie** auf.",
-        "height": 1000,
+        "content": "## Weiterleiten\nn8n liest nur `status` und `urgency.level`. Alles landet in der Prüfliste; Notfälle stehen dort oben. `/api/approve` ruft n8n **nie** auf.\n\n*EN: Routing. n8n only reads `status` and `urgency.level`. Everything lands in the review list; emergencies are on top. n8n **never** calls `/api/approve`.*",
+        "height": 1060,
         "width": 1020,
         "color": 2
       },
@@ -479,172 +500,198 @@
         2180,
         100
       ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "ef1075ad-4f61-4a64-9342-faac78d8064e",
+      "name": "Antwort an Aufrufer (Respond to caller)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3260,
+        460
+      ]
     }
   ],
   "connections": {
-    "1 Verstehen (KI oder Regeln)": {
+    "1 Verstehen (Understand – AI or rules)": {
       "main": [
         [
           {
-            "node": "2 Zuordnung im ERP",
+            "node": "2 Zuordnung (Matching)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "2 Zuordnung im ERP": {
+    "2 Zuordnung (Matching)": {
       "main": [
         [
           {
-            "node": "3 Frühere Vorgänge",
+            "node": "3 Frühere Vorgänge (Earlier cases)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "3 Frühere Vorgänge": {
+    "3 Frühere Vorgänge (Earlier cases)": {
       "main": [
         [
           {
-            "node": "4 Dringlichkeit",
+            "node": "4 Dringlichkeit (Urgency)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "4 Dringlichkeit": {
+    "4 Dringlichkeit (Urgency)": {
       "main": [
         [
           {
-            "node": "5 Antwortentwurf (nie senden)",
+            "node": "5 Antwortentwurf – nie senden (Reply draft – never sent)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "5 Antwortentwurf (nie senden)": {
+    "5 Antwortentwurf – nie senden (Reply draft – never sent)": {
       "main": [
         [
           {
-            "node": "6 Interne Aufgabe",
+            "node": "6 Interne Aufgabe (Internal task)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "E-Mail eingegangen": {
+    "E-Mail eingegangen (E-mail received)": {
       "main": [
         [
           {
-            "node": "E-Mail vorbereiten",
+            "node": "E-Mail vorbereiten (Prepare e-mail)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "E-Mail vorbereiten": {
+    "E-Mail vorbereiten (Prepare e-mail)": {
       "main": [
         [
           {
-            "node": "1 Verstehen (KI oder Regeln)",
+            "node": "1 Verstehen (Understand – AI or rules)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "6 Interne Aufgabe": {
+    "6 Interne Aufgabe (Internal task)": {
       "main": [
         [
           {
-            "node": "Notfall?",
+            "node": "Notfall? (Emergency?)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Notfall?": {
+    "Notfall? (Emergency?)": {
       "main": [
         [
           {
-            "node": "Bereitschaft alarmieren (Produktion: SMS)",
+            "node": "Bereitschaft alarmieren – Produktion (Alert on-call – production)",
             "type": "main",
             "index": 0
           },
           {
-            "node": "Status?",
+            "node": "Status? (Status?)",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Status?",
+            "node": "Status? (Status?)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Status?": {
+    "Status? (Status?)": {
       "main": [
         [
           {
-            "node": "Vorschlag zur Freigabe",
+            "node": "Vorschlag zur Freigabe (Proposal for approval)",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Rückfrage vorbereitet",
+            "node": "Rückfrage vorbereitet (Question prepared)",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "An Fachstelle weiterleiten",
+            "node": "An Fachstelle weiterleiten (Forward to team)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Vorschlag zur Freigabe": {
+    "Vorschlag zur Freigabe (Proposal for approval)": {
       "main": [
         [
           {
-            "node": "In Prüfliste ablegen",
+            "node": "In Prüfliste ablegen (Store in review list)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Rückfrage vorbereitet": {
+    "Rückfrage vorbereitet (Question prepared)": {
       "main": [
         [
           {
-            "node": "In Prüfliste ablegen",
+            "node": "In Prüfliste ablegen (Store in review list)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "An Fachstelle weiterleiten": {
+    "An Fachstelle weiterleiten (Forward to team)": {
       "main": [
         [
           {
-            "node": "In Prüfliste ablegen",
+            "node": "In Prüfliste ablegen (Store in review list)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "In Prüfliste ablegen (Store in review list)": {
+      "main": [
+        [
+          {
+            "node": "Antwort an Aufrufer (Respond to caller)",
             "type": "main",
             "index": 0
           }
