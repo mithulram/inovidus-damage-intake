@@ -54,4 +54,11 @@ R9-01 the n8n webhook was open and returned the full case → token-protected we
 
 ## Inspection 10 – full build (by Codex, fresh session, 346 s) – **Score 7/10, 3 findings**
 R10-01 the bootstrap n8n listened on all interfaces → loopback only, killed on failure (Claude; verified with lsof) · R10-02 "2. bzw. 3. OG" collapsed to one floor → Codex WO10 (run cut off by Codex's usage limit after writing the change; Claude inspected and proved it) · R10-03 translation re-render could reset a manual approval form → state kept per case (Claude; browser-checked). 837 tests.
-Codex usage limit reached again (resets 05:17). Round 11 pending.
+Codex usage limit reached again (resets 05:17).
+
+## Hosting (19 Nov, ~03:00–05:00)
+Repo made public (Mithul's OK) so Render could read it; Render blueprint deployed both services in Frankfurt (free plan). Verified without credentials: intake /api/health 200, every other path 401; n8n ready after cold start, webhook 403 without token, owner pre-created (no public setup page).
+
+## Inspection 11 – full build incl. hosting (by Codex, fresh session) – **Score 8/10, 3 findings**
+R11-01 approvals were not tied to the ERP data the reviewer saw · R11-02 an LLM could return one field with alternatives ("2. bzw. 3. OG", "links bzw. rechts", "12-14") and get a definite match · R11-03 step requests of one chain could run on different rule versions.
+- Claude fixed all three: ERP fingerprint per case (409 at approval, supersede on change, audit label "neu verarbeitet (ERP-Daten geändert)"); one shared check for compound location values in every provider (floor/side → review, street/house → building uncertain); steps and stores reject a case built on other rules/ERP data (409). +13 regression tests, 851 tests, 14/14 scenarios. Commit 6e0aecd, redeployed on Render.
