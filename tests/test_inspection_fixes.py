@@ -797,3 +797,34 @@ def test_writing_for_someone_else_is_not_the_tenant(client, text):
 def test_plain_bracket_after_place_still_matches(client):
     case = _process(client, "Wasser läuft aus der Spüle. Musterstraße 12, 2. OG links (Küche). Viele Grüße, Max Mustermann")
     assert case["status"] == "READY_FOR_APPROVAL" and case["match"]["selected_contract"] == "MV-10245"
+
+
+# ---- round 17 --------------------------------------------------------------
+
+# R17-01 – a wrapped line inside a sentence does not hide a negation
+@pytest.mark.parametrize("text", ["Musterstraße 12, 2. OG links wohnen wir\nnicht mehr.",
+                                  "Musterstraße 12, wir wohnen nicht\nmehr im 2. OG links."])
+def test_line_wrap_does_not_hide_negation(client, text):
+    case = _process(client, f"Wasser läuft aus der Spüle. {text} Viele Grüße, Max Mustermann")
+    assert case["status"] == "NEEDS_REVIEW" and case["match"]["selected_contract"] is None
+
+
+def test_blank_line_still_separates_negation(client):
+    case = _process(client, "Musterstraße 12, zweite Etage links\n\nNicht dringend, aber Wasser läuft aus der Spüle. "
+                            "Viele Grüße, Max Mustermann")
+    assert case["status"] == "READY_FOR_APPROVAL" and case["match"]["selected_contract"] == "MV-10245"
+
+
+# R17-02 – writing for someone else is an identity question, whatever the threshold
+@pytest.mark.parametrize("phrase", ["Ich schreibe für meinen Partner.", "Ich schreibe für meine Mutter.",
+                                    "Ich schreibe für meine Mitbewohnerin."])
+def test_writing_for_someone_else_forces_identity_review(client, phrase):
+    case = _process(client, f"Wasser läuft aus der Spüle. {phrase} Musterstraße 12, 2. OG links. Viele Grüße, Max Mustermann")
+    assert case["status"] == "NEEDS_REVIEW" and "identity" in case["match"]["failed_gates"]
+
+
+def test_proxy_review_holds_with_lowered_threshold():
+    rules = load_rules(None, {"match": {"threshold": 0.65}})
+    r = match(ext(tenant_name=None, on_behalf_of="für meine Mutter"),
+              InboundEmail(body="x", sender_email="max.mustermann@example.org"), JsonERP(), rules)
+    assert r.selected_contract is None and "identity" in {g.value for g in r.failed_gates}

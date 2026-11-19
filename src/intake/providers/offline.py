@@ -15,7 +15,10 @@ _NAME = rf"{_NAME_WORD}(?:[ \t]+{_NAME_WORD}){{1,3}}"
 _STREET_PREFIX = (
     r"(?!(?:wir|ich|der|die|das|dem|den|in|im|am|an|auf|zur|zum|bei|von|"
     r"wohnen|wohne|leben|adresse|anschrift|hallo|bitte|hilfe|notfall|außerdem|"
-    r"achtung|dringend|wohnung|unsere|meine|hello|hi|help|urgent|we|at|live|the|address)\b)"
+    r"achtung|dringend|wohnung|unsere|meine|hello|hi|help|urgent|we|at|live|the|address|"
+    # verbs, negations and adverbs never start a street name ("die Heizung geht nicht\nMusterstraße 12")
+    r"nicht|kein|keine|geht|gehen|ist|sind|war|hat|haben|mehr|noch|auch|weg|mal|schon|seit|heute|gestern|"
+    r"jetzt|sofort|kaputt|nass|aus|und|oder|aber|es|mir|uns|danke|not|no|is|and|out)\b)"
     r"[A-ZÄÖÜa-zäöüß][\w-]*\s+"
 )
 # Preserve unfamiliar numeric tokens too; validation must never truncate an
@@ -24,7 +27,8 @@ _HOUSE_NUMBER = r"\d+\w*(?:\.\d+\w*)*(?:[ \t]+[a-z])?(?!\w)"
 # A comma before a floor ("12, 2. OG") ends the house-number expression.
 # Letter endpoints stay literal: "12a-c" contributes "c", never an invented "12c".
 _HOUSE_NUMBER_EXTRA = (
-    rf"(?:{_HOUSE_NUMBER}|[a-z](?!\w))"
+    # A 5-digit number after the house number is a postcode ("12, 12345 Musterstadt"), not a 2nd house number.
+    rf"(?!\d{{5}}(?!\d))(?:{_HOUSE_NUMBER}|[a-z](?!\w))"
     r"(?!\s*\.?\s*(?:Obergeschoss|Stockwerk|Etage|Stock|OG|floor)\b)"
 )
 _HOUSE_NUMBER_CONTINUATION = re.compile(
@@ -45,6 +49,66 @@ _LOCATION_REFERENCE = re.compile(
     r"Straße|Strasse|Str\.?|Wohnungsseite|floor|address|street|house\s+number|apartment\s+side)(?!\w)",
     re.IGNORECASE,
 )
+
+
+# End of a clause for negation scans: punctuation, a blank line, or a line break before a new statement
+# (capital letter or digit). A wrapped line that continues in lower case ("wohnen wir\nnicht mehr") is one clause.
+_CONTINUES = "".join(rf"(?<![ \t]{w})" for w in ("in", "im", "am", "an", "auf", "zum", "zur", "bei", "von", "der",
+                                                  "die", "das", "dem", "den"))
+# ... but a line that ends in a preposition/article ("nicht mehr in der\nMusterstraße 12") continues the sentence.
+# The check sits right after the last word of the line, so trailing spaces and "\r\n" do not hide it.
+_CLAUSE_END = rf"[.!?;:,]|\r?\n[ \t\r]*\n|(?<![ \t\r]){_CONTINUES}[ \t\r]*\n(?=[ \t]*[A-ZÄÖÜ0-9])"
+_CLAUSE_END_RE = re.compile(_CLAUSE_END)
+# Flat number: "Wohnung 5", "Whg.-Nr. 5", "Wohnungsnummer: 5", "WE 5" (upper case only: "we" is English)
+_FLAT = re.compile(r"\b(?:(?i:Wohnung(?:snummer|snr\.?)?|Whg\.?|Apartment|Appartement|Flat)|WE)"
+                   r"[ \t]*(?:[-:#][ \t]*)?(?:(?i:Nr\.?)[ \t]*(?:[:#][ \t]*)?)?\d{1,4}[a-z]?\b"
+                   r"(?!\s*\.?\s*(?i:OG|Obergeschoss|Etage|Stock|floor)\b)"
+                   r"(?!\s*(?i:zimmer|zi|qm|m²|m2|räume|raeume|cm|mm|m|personen|kinder|jahre|tage|stunden|monate)\b)")
+# A number after "Haus"/"Eingang" that is a measure or a count, not a designator ("im Eingang 2 cm Wasser")
+_NOT_DESIGNATOR = (r"(?!\s*(?i:cm|mm|m|meter|liter|l|personen|kinder|leute|stunden|std|tage|minuten|min|jahre|grad|°|%"
+                   r"|wohnungen|etagen|stockwerke|parteien|mieter|familien)\b)")
+# Words that follow "in" after an address but are never a town ("Musterstraße 12 in der Küche")
+_NOT_TOWN = ["der", "die", "das", "dem", "den", "einer", "einem", "meiner", "unserer", "Wohnung", "Whg", "Apartment",
+             "Flat", "Etage", "Stock", "Obergeschoss", "Erdgeschoss", "Dachgeschoss", "Keller",
+             # common nouns after "in" ("in Flammen", "in Gefahr", "in Not") are not towns
+             "Flammen", "Gefahr", "Not", "Ordnung", "Panik", "Sorge", "Eile", "Brand", "Rauch", "Wasser", "Gas",
+             "Strom", "Betrieb", "Arbeit", "Urlaub", "Quarantäne", "Kontakt", "Rente", "Lebensgefahr", "Angst",
+             "Sicherheit", "Hausflur", "Treppenhaus", "Tiefgarage", "Waschküche", "Heizungsraum", "Dachboden",
+             "Heizung", "Küche", "Garten", "Leitung", "Wand", "Decke"]  # not "Bad"/"Hof"/"Speicher": real towns
+# ... and words that end like a place inside a house or a state, never a town ("in Lebensgefahr", "in Hausflur")
+_NOT_TOWN_SUFFIX = re.compile(r".(gefahr|flur|garage|raum|keller|zimmer|kueche|bad|wc|bereich|ecke|not|angst|panik)$")
+
+
+def _postal_near(body: str, address: re.Match, rules: Rules) -> str | None:
+    """Postcode and/or town written directly next to one address ("…12, 12345 Musterstadt", "in Anderstadt")."""
+    not_town = {fold(w) for w in [*_NOT_TOWN, *rules.classification.rooms, *rules.normalize.ground_floor_terms,
+                                  *rules.normalize.unclear_floor_terms, *rules.normalize.building_part_words,
+                                  *rules.normalize.building_part_prefixes]}
+    after = re.match(r"[ \t]*[,\n]?[ \t]*(?:in[ \t]+)?(?P<zip>\d{5})(?!\d)(?:[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+))?"
+                     r"|[ \t]*[,\n]?[ \t]*in[ \t]+(?P<town>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)(?=\s*(?:[,\n.!?;(–-]|$|im\b|in\b|am\b|auf\b|\d))",
+                     body[address.end():])
+    ahead = body[max(0, address.start() - 60):address.start()]
+    before = (re.search(r"(?P<zip>\d{5})[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)[ \t]*[,\n]?[ \t]*$", ahead)
+              or re.search(r"\b[Ii]n[ \t]+(?P<city>(?:(?:Bad|Sankt|St\.|Neu|Groß|Gross|Klein|Alt|Ober|Unter|Nieder|Hohen)[ \t]+)?[A-ZÄÖÜ][\w-]+)[ \t]*[,\n]?[ \t]*(?:in[ \t]+der[ \t]+)?$", ahead))
+    hit = after or before
+    if not hit:
+        return None
+    zip_code, town = hit.groupdict().get("zip"), hit.groupdict().get("city") or hit.groupdict().get("town")
+    # judged by its last word: "Bad Homburg" is a town, "Küche Wasser" / "Lebensgefahr" are not
+    if town and (fold(town).split()[-1] in not_town or _NOT_TOWN_SUFFIX.search(fold(town).split()[-1])):
+        town = None
+    return " ".join(p for p in (zip_code, town) if p) or None
+
+
+def postal_for(email: InboundEmail, rules: Rules, street_raw: str | None, house_no: str | None) -> str | None:
+    """Postcode/town next to the body address that equals the given street + house number (any reader's choice)."""
+    if not (street_raw and house_no):
+        return None
+    for address in _ADDRESS.finditer(email.body):
+        if (normalize_street(address.group("street")) == normalize_street(street_raw)
+                and normalize_house_no(address.group("number")) == normalize_house_no(house_no)):
+            return _postal_near(email.body, address, rules)
+    return None
 
 
 def _hits(text: str, keywords: list[str], *, whole_words: bool = False) -> list[str]:
@@ -268,7 +332,7 @@ class OfflineProvider:
         holder = re.search(rf"(?i:Wohnung\s+von|für\s+meinen\s+Partner)\s+({_NAME})", email.body)
         # Writing for someone else ("für meine Mutter", "i. A. Hausverwaltung", "on behalf of") without naming
         # the contract holder: the tenant is unknown – never assume the writer is the tenant.
-        proxy = re.search(r"(?i:\bfür\s+(?:meine[nmr]?|unsere[nmr]?)\s+(?:Mutter|Vater|Eltern|Oma|Opa|Großmutter|Großvater"
+        proxy = re.search(r"(?i:\bfür\s+(?:meine[nmr]?|unsere[nmr]?)\s+(?:Mutter|Vater|Eltern|Oma|Opa|Großmutter|Großvater|Partnerin|Partner|Freund(?:in)?|Lebensgefährt(?:e|in|en)|Mitbewohner(?:in)?"
                           r"|Tochter|Sohn|Schwester|Bruder|Nachbar(?:in|n)?|Tante|Onkel|Frau|Mann|Partnerin|Mieter(?:in)?)"
                           r"|\bi\.\s*A\.|\bim\s+Auftrag\b|\bon\s+behalf\s+of\b|\bfor\s+my\s+(?:mother|father|parents|neighbou?r))",
                           email.body)
@@ -285,16 +349,29 @@ class OfflineProvider:
         negation = re.compile(r"\b(?:nicht|kein(?:e|em|en|er)?|nie|niemals|not|no|never|außer|ausser|except"
                               r"|ehemals|früher|frueher|formerly|previously)\b", re.IGNORECASE)
         alternatives = _location_alternatives(raw_text, addresses, floors, sides, rules, len(email.body))
+        body_len = len(email.body)
         for place in [*addresses, *floors, *sides]:
-            window = max(0, place.start() - 80)
-            boundary = max((m.end() for m in re.finditer(r"[.!?;:,\n]", raw_text[window:place.start()])),
-                           default=0) + window
+            # A wrapped line inside a sentence is just whitespace; only punctuation, a blank line or the
+            # body/subject seam ends the clause ("… links wohnen wir\nnicht mehr").
+            lo, hi = (0, body_len) if place.start() < body_len else (body_len + 1, len(raw_text))
+            window = max(lo, place.start() - 80)
+            # look one character past the slice so "\n" before the place itself can see the place's capital letter
+            boundary = max((m.end() for m in _CLAUSE_END_RE.finditer(raw_text, window, place.start() + 1)
+                            if m.end() <= place.start()), default=window)
+            # "wir wohnen nicht mehr\nMusterstraße 12": a living verb + negation on the line just before the place
+            line_start = raw_text.rfind("\n", 0, place.start())
+            if line_start > 0 and re.fullmatch(r"\s*(?:(?i:in|im|am|an|auf|bei)\s+)?(?:(?i:der|die|dem|den)\s+)?",
+                                               raw_text[line_start + 1:place.start()]):
+                prev = raw_text[raw_text.rfind("\n", 0, line_start) + 1:line_start]
+                if re.search(r"\b(?:wohne|wohnen|wohnt|lebe|leben|lebt|live|lives|living)\b[^.!?;]*"
+                             r"\b(?:nicht|kein\w*|not|no longer|never)\b[^.!?;]*$", prev, re.IGNORECASE):
+                    alternatives.append(raw_text[line_start - len(prev):place.end()])
             if hit := negation.search(raw_text, boundary, place.start()):
                 alternatives.append(raw_text[hit.start():place.end()])
             # … and later in the same clause: "2. OG links wohnen wir nicht mehr"
-            stop = re.compile(r"[.!?;:,\n]|\b(?:und|aber|sondern|denn|weil|dass|seit|and|but|because|since)\b",
-                              re.IGNORECASE).search(raw_text, place.end(), min(len(raw_text), place.end() + 80))
-            clause_end = stop.start() if stop else min(len(raw_text), place.end() + 80)
+            stop = re.compile(_CLAUSE_END + r"|\b(?i:und|aber|sondern|denn|weil|dass|seit|and|but|because|since)\b"
+                              ).search(raw_text, place.end(), min(hi, place.end() + 80))
+            clause_end = stop.start() if stop else min(hi, place.end() + 80)
             if hit := negation.search(raw_text, place.end(), clause_end):
                 alternatives.append(raw_text[place.start():hit.end()])
             # a bracket right after the place that hedges it: "2. OG links (oder doch 3.?)", "(glaube ich)"
@@ -319,13 +396,51 @@ class OfflineProvider:
                     street_override = raw_text[start:place.end("street")]
             else:
                 alternatives.append(raw_text[start:place.end()])
+        # --- Around the main address: postcode/town, building parts, flat numbers (all fail-safe) ------
+        postal_raw = None
+        body_address = next((a for a in addresses if a.start() < body_len), None)
+        place_spans = [m for m in (body_address, *(f for f in floors[:1] if f.start() < body_len),
+                                   *(s for s in sides[:1] if s.start() < body_len)) if m is not None]
+        if body_address is not None:
+            postal_raw = _postal_near(email.body, body_address, rules)
+
+        def sentence_of(pos: int) -> tuple[int, int]:
+            """Sentence (or address block) around pos in the body: ends at ! ? ;, a blank line, or a full stop
+            that is not part of "Str.", "Nr.", "2." etc. A single line break is not an end (address blocks)."""
+            end_re = re.compile(r"[!?;]|\n[ \t]*\n|(?<![\d])(?<![Ss]tr)(?<![Nn]r)(?<![Hh]sn)(?<![Ww]hg)(?<!li)(?<!re)\.(?=\s+[A-ZÄÖÜ]|\s*$)")
+            start = max((m.end() for m in end_re.finditer(email.body, 0, pos)), default=0)
+            stop = end_re.search(email.body, pos)
+            return start, stop.start() if stop else body_len
+
+        if body_address is not None:
+            lo, hi = sentence_of(body_address.start())
+            words = "|".join(map(re.escape, rules.normalize.building_part_words))
+            prefixes = "|".join(map(re.escape, rules.normalize.building_part_prefixes))
+            part = re.compile(rf"(?i:\b(?:{words})\b)|(?i:\b(?:{prefixes}))[ \t]+(?:[A-Z]|\d{{1,3}})\b"
+                              r"(?!\s*\.?\s*(?i:OG|Obergeschoss|Etage|Stock)\b)" + _NOT_DESIGNATOR)
+            for m in part.finditer(email.body, lo, hi):
+                if not (body_address.start() <= m.start() < body_address.end()):
+                    alternatives.append(f"{body_address.group(0)} {m.group(0)}")
+        if place_spans:
+            unit_text = " ".join(m.group(0) for m in (*floors[:1], *sides[:1]) if m.start() < body_len)
+            seen_spans = set()
+            for anchor_span in place_spans:
+                lo, hi = sentence_of(anchor_span.start())
+                if (lo, hi) in seen_spans:
+                    continue
+                seen_spans.add((lo, hi))
+                for m in _FLAT.finditer(email.body, lo, hi):
+                    alternatives.append(f"{m.group(0)}, {unit_text}".rstrip(", ") if unit_text else m.group(0))
+
         extraction = Extraction(
             sender_name=sender_name,
-            tenant_name=holder.group(1) if holder else (f"unbekannt ({proxy.group(0)})" if proxy else sender_name),
+            tenant_name=holder.group(1) if holder else (None if proxy else sender_name),
+            on_behalf_of=proxy.group(0) if proxy else None,
             street_raw=(street_override or address.group("street")) if address else None,
             house_no=address.group("number") if address else None,
             floor_raw=floor.group(0) if floor else None, side_raw=side, room=room,
             location_alternatives=list(dict.fromkeys(alternatives)),
+            postal_raw=postal_raw,
             damage_description=description,
             since=_raw(r"\b(?:seit\s+(?:gestern|heute(?:\s+(?:Morgen|Nacht))?)|since\s+yesterday)\b", email.body),
             photos_mentioned=bool(re.search(r"\b(?:Fotos?|Bilder|photos?)\b", text, re.IGNORECASE)),

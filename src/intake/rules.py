@@ -52,6 +52,10 @@ class NormalizeRules(_M):
     ground_floor_terms: list[str]
     unclear_floor_terms: list[str]
     side_terms: dict[Literal["L", "R", "M"], list[str]]
+    # Parts of a property that may be a different building: alone ("Hinterhaus") or with a designator ("Haus B")
+    building_part_words: list[str] = ["Hinterhaus", "Vorderhaus", "Seitenflügel", "Quergebäude", "Gartenhaus",
+                                      "Rückgebäude", "Hofgebäude"]
+    building_part_prefixes: list[str] = ["Haus", "Aufgang", "Eingang", "Block", "Treppenhaus"]
 
 
 class OutOfScopeType(_M):

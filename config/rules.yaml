@@ -48,6 +48,9 @@ normalize:
     L: [links, li, "li.", "l.", left]
     R: [rechts, re, "re.", "r.", right]
     M: [mitte, mittig, middle, center]
+  # Gebäudeteile: allein ("Hinterhaus") oder mit Kennung ("Haus B", "Aufgang 2") -> Gebäude unklar -> Prüfung
+  building_part_words: [Hinterhaus, Vorderhaus, Seitenflügel, Quergebäude, Gartenhaus, Rückgebäude, Hofgebäude]
+  building_part_prefixes: [Haus, Aufgang, Eingang, Block, Treppenhaus]
 
 # -----------------------------------------------------------------------------
 # 3) Art der Nachricht und Schadenart

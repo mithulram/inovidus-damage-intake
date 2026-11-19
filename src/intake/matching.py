@@ -221,6 +221,18 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
     if loc.floor_status == "english_ordinal" and rules.normalize.english_floor_counting == "ask":
         fail(Gate.FLOOR_AMBIGUOUS, f"Zählweise der Etage unklar: {loc.floor_note}")
     building_uncertain = False
+    # Postcode/town next to the address must belong to the same ERP property (any provider that sets postal_raw).
+    prop = next((p for p in erp.properties() if p.object_id == object_id), None) if ext.postal_raw else None
+    if prop is not None:
+        zip_given = re.search(r"\b\d{5}\b", ext.postal_raw)
+        town_given = re.sub(r"\b\d{5}\b", "", ext.postal_raw).strip()
+        # "Frankfurt" for "Frankfurt am Main" is the same town: compare word by word from the start
+        town_ok = not town_given or fold(prop.city).split()[:len(fold(town_given).split())] == fold(town_given).split()
+        if (zip_given and zip_given.group(0) != prop.zip) or not town_ok:
+            fail(Gate.UNIT_AMBIGUOUS, f"PLZ/Ort '{ext.postal_raw}' passt nicht zu {prop.street} {prop.house_no}, "
+                                      f"{prop.zip} {prop.city} – beim Mieter nachfragen")
+            building_uncertain = True
+            object_id = None
     # Same check for every provider: a single field that itself holds alternatives is ambiguous too.
     field_values = {"street": ext.street_raw, "house_no": ext.house_no, "floor": ext.floor_raw, "side": ext.side_raw}
     compound = {f: v for f, v in field_values.items() if compound_location(v, f, rules.normalize)}
@@ -273,6 +285,9 @@ def match(ext: Extraction, email: InboundEmail, erp: ERPConnector, rules: Rules)
         name_sig = next(s for s in winner.signals if s.name == "name")
         if name_sig.result == "partial":
             fail(Gate.IDENTITY, f"Name weicht ab: '{name_sig.email_value}' vs. '{winner.tenant_name}'")
+        # Writing for someone else: the contract holder is not confirmed – always review, whatever the score.
+        if ext.on_behalf_of:
+            fail(Gate.IDENTITY, f"Absender schreibt für eine andere Person ('{ext.on_behalf_of}') – Vertragsinhaber klären")
         # Who wrote: the signature (reader) AND the e-mail header name – either one differing from the holder counts.
         for writer in dict.fromkeys(n.strip() for n in (ext.sender_name, email.sender_display_name) if n and n.strip()):
             if _name_similarity(writer, winner.tenant_name) < rules.match.name_full_min and name_sig.result != "partial":

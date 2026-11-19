@@ -155,6 +155,10 @@ def _(m): return f"Gap to the second best only {m[1]} (minimum {m[2]}) – both 
 def _(m): return f"Gap to the second best only {m[1]} (minimum {m[2]}) – only {m[3]} left, but the gap to 0 is not enough"
 @rule(r"^Name weicht ab: '(.*)' vs\. '(.*)'$")
 def _(m): return f"Name differs: '{m[1]}' vs. '{m[2]}'"
+@rule(r"^PLZ/Ort '(.*)' passt nicht zu (.*) – beim Mieter nachfragen$")
+def _(m): return f"Postcode/town '{m[1]}' does not match {m[2]} – ask the tenant"
+@rule(r"^Absender schreibt für eine andere Person \('(.*)'\) – Vertragsinhaber klären$")
+def _(m): return f"Sender writes for another person ('{m[1]}') – confirm the contract holder"
 @rule(r"^Absender '(.*)' ist nicht Vertragsinhaber \((.*)\)$")
 def _(m): return f"Sender '{m[1]}' is not the contract holder ({m[2]})"
 @rule(r"^Nachricht nicht von der registrierten E-Mail-Adresse$")

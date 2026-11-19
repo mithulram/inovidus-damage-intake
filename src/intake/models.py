@@ -115,6 +115,8 @@ class Extraction(Strict):
     photos_mentioned: bool = False
     phone: str | None = None
     language: Literal["de", "en"] = "de"
+    postal_raw: str | None = Field(None, description="PLZ und/oder Ort direkt bei der Adresse, wörtlich (z. B. '12345 Musterstadt')")
+    on_behalf_of: str | None = Field(None, description="Absender schreibt für eine andere Person (wörtlich), z. B. 'für meine Mutter'")
     location_alternatives: list[str] = Field(
         default_factory=list,
         description="Weitere oder unsichere Ortsangaben (z. B. '3. OG rechts', 'bin unsicher'); nicht leer = Prüfung")
