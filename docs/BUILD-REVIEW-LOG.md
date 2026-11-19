@@ -51,3 +51,7 @@ A forked session had added plan §19 (Render hosting, full German/English) and a
 
 ## Inspection 9 – full build incl. §19 (by Codex, fresh session, 347 s) – **Score 7/10, 3 findings**
 R9-01 the n8n webhook was open and returned the full case → token-protected webhook + minimal receipt (Claude, rehearsed: 403 without token) · R9-02 "Musterstraße 12-14" and a prefix on the previous line were truncated → Codex WO9 · R9-03 superseded approvals still froze newer results → Claude. 785 tests.
+
+## Inspection 10 – full build (by Codex, fresh session, 346 s) – **Score 7/10, 3 findings**
+R10-01 the bootstrap n8n listened on all interfaces → loopback only, killed on failure (Claude; verified with lsof) · R10-02 "2. bzw. 3. OG" collapsed to one floor → Codex WO10 (run cut off by Codex's usage limit after writing the change; Claude inspected and proved it) · R10-03 translation re-render could reset a manual approval form → state kept per case (Claude; browser-checked). 837 tests.
+Codex usage limit reached again (resets 05:17). Round 11 pending.
