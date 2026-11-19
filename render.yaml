@@ -1,0 +1,58 @@
+# Render Blueprint – hosted demo (free plan). Mithul creates it from the Render dashboard
+# ("New → Blueprint" with this repository). Secrets marked sync:false are entered there.
+services:
+  - type: web
+    name: inovidus-intake
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install uv==0.12.8 && uv sync --frozen --no-dev
+    startCommand: uv run --no-dev intake-ui
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: INTAKE_HOST
+        value: 0.0.0.0
+      - key: LLM_PROVIDER
+        value: offline             # no API key on the host; "Groq · Aufzeichnung" selectable in the UI
+      - key: INTAKE_ACCESS_PASSWORD
+        sync: false                # shared demo password for people (any user name)
+      - key: INTAKE_SERVICE_TOKEN
+        generateValue: true        # used by n8n; copy it into the n8n service
+
+  - type: web
+    name: inovidus-n8n
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./deploy/n8n/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: INTAKE_API_URL
+        sync: false                # https://<inovidus-intake>.onrender.com
+      - key: INTAKE_SERVICE_TOKEN
+        sync: false                # same value as in inovidus-intake
+      - key: N8N_OWNER_EMAIL
+        sync: false
+      - key: N8N_OWNER_PASSWORD
+        sync: false
+      - key: N8N_HOST
+        value: 0.0.0.0
+      - key: N8N_PROTOCOL
+        value: https
+      - key: N8N_DIAGNOSTICS_ENABLED
+        value: "false"
+      - key: N8N_VERSION_NOTIFICATIONS_ENABLED
+        value: "false"
+      - key: N8N_TEMPLATES_ENABLED
+        value: "false"
+      - key: N8N_DEFAULT_LOCALE
+        value: de
+      - key: GENERIC_TIMEZONE
+        value: Europe/Berlin
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
+      - key: EXECUTIONS_DATA_PRUNE
+        value: "true"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import hmac
 import os
 import time
 import threading
@@ -11,7 +13,8 @@ from pathlib import Path
 import uvicorn
 import yaml
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import Request
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict
 
@@ -79,6 +82,29 @@ def create_app(*, store: CaseStore | None = None, audit: AuditLog | None = None,
                static_dir: Path | str | None = None) -> FastAPI:
     load_dotenv()
     app = FastAPI(title="Schadenmeldungen – Prüfliste")
+
+    # Hosted demo protection (Render): a shared password for people (HTTP Basic, any user name)
+    # and a service token for n8n. Unset locally = open, as before. /api/health stays open for health checks.
+    password = os.getenv("INTAKE_ACCESS_PASSWORD") or ""
+    service_token = os.getenv("INTAKE_SERVICE_TOKEN") or ""
+
+    @app.middleware("http")
+    async def access_guard(request: Request, call_next):
+        if (not password and not service_token) or request.url.path == "/api/health":
+            return await call_next(request)
+        token = request.headers.get("x-intake-token", "")
+        if service_token and token and hmac.compare_digest(token, service_token):
+            return await call_next(request)
+        auth = request.headers.get("authorization", "")
+        if password and auth.lower().startswith("basic "):
+            try:
+                given = base64.b64decode(auth[6:]).decode("utf-8").split(":", 1)[1]
+            except Exception:  # noqa: BLE001 – malformed header = not authenticated
+                given = ""
+            if hmac.compare_digest(given, password):
+                return await call_next(request)
+        return PlainTextResponse("Anmeldung erforderlich / Login required", status_code=401,
+                                 headers={"WWW-Authenticate": 'Basic realm="Schadenmeldungen-Demo", charset="UTF-8"'})
     app.state.store = store if store is not None else CaseStore()
     app.state.audit = audit if audit is not None else AuditLog()
     static = Path(static_dir) if static_dir is not None else Path(__file__).parent / "static"
@@ -262,4 +288,6 @@ app = create_app()
 
 
 def run() -> None:
-    uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("INTAKE_PORT", "8000")))
+    # Locally 127.0.0.1:8000; on a host set INTAKE_HOST=0.0.0.0 (Render provides PORT).
+    uvicorn.run(app, host=os.getenv("INTAKE_HOST", "127.0.0.1"),
+                port=int(os.getenv("PORT") or os.getenv("INTAKE_PORT") or "8000"))

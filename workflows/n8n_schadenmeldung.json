@@ -63,6 +63,12 @@
               "name": "api_url",
               "type": "string",
               "value": "http://127.0.0.1:8000"
+            },
+            {
+              "id": "api-token",
+              "name": "api_token",
+              "type": "string",
+              "value": ""
             }
           ]
         },
@@ -86,6 +92,16 @@
         "jsonBody": "={{ JSON.stringify({ email: $json.email, provider: $json.provider, scenario_id: $json.scenario_id || null }) }}",
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_token }}"
+            }
+          ]
         }
       },
       "id": "21539838-ce09-4d91-a4bd-e87a9a8b50bb",
@@ -109,6 +125,16 @@
         "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_token }}"
+            }
+          ]
         }
       },
       "id": "e8a6298a-1380-4e7f-894b-f989f4857246",
@@ -132,6 +158,16 @@
         "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_token }}"
+            }
+          ]
         }
       },
       "id": "f3bd09ab-34e8-4436-a775-464aa9ade2d9",
@@ -155,6 +191,16 @@
         "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_token }}"
+            }
+          ]
         }
       },
       "id": "acf1ca13-a426-4329-92d7-929df9c91bad",
@@ -178,6 +224,16 @@
         "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_token }}"
+            }
+          ]
         }
       },
       "id": "078122ec-0614-4342-a03b-5f27946821da",
@@ -201,6 +257,16 @@
         "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('E-Mail vorbereiten (Prepare e-mail)').item.json.provider, scenario_id: $('E-Mail vorbereiten (Prepare e-mail)').item.json.scenario_id || null }) }}",
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_token }}"
+            }
+          ]
         }
       },
       "id": "be24ebb0-4af9-4cdc-b060-3ae5518d9451",
@@ -391,6 +457,16 @@
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
           "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('E-Mail vorbereiten (Prepare e-mail)').item.json.api_token }}"
+            }
+          ]
         }
       },
       "id": "87a15cfc-0150-4c11-ada6-496c4cfa7cd2",
