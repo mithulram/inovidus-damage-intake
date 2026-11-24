@@ -1,0 +1,33 @@
+[project]
+name = "intake"
+version = "0.1.0"
+description = "KI-gestützte Verarbeitung von Schadenmeldungen – Prototyp (Inovidus Praxisaufgabe)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.9",
+    "pyyaml>=6.0",
+    "rapidfuzz>=3.9",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+intake = "intake.cli:main"
+intake-ui = "intake.web.app:run"
+intake-scenarios = "intake.scenarios:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/intake"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

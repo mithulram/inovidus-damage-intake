@@ -1,0 +1,47 @@
+{
+  "request": {
+    "model": "openai/gpt-oss-120b",
+    "response_format": "json_schema strict",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Du liest E-Mails an eine Hausverwaltung und gibst NUR die geforderten Felder als JSON zurück.\nRegeln:\n- Kopiere Adresse, Etage und Seite WÖRTLICH aus der E-Mail (z. B. \"Musterstr.\", \"zweite Etage\", \"links\"). Nicht umrechnen, nicht ergänzen, nicht raten.\n- tenant_name = der Vertragsinhaber, auf den sich die Mail bezieht (z. B. \"Wohnung von X\"); sonst der Unterzeichner. sender_name = wer unterschreibt.\n- Fehlt eine Angabe, setze null. Erfinde keine Daten.\n- type: SCHADENMELDUNG (Schaden/Mangel), ANFRAGE_MIETE (Miete, Nebenkosten, Kaution), SONSTIGES.\n- category (deutsch): z. B. Wasserschaden, Rohrbruch, Rohrverstopfung, Gasgeruch, Heizungsausfall, Elektrik, Schimmel, Fenster/Türen. trade: Gewerk (z. B. Sanitär).\n- urgency_hint: NOTFALL (Gefahr für Menschen/Gebäude), DRINGEND (Schaden schreitet fort), NORMAL. Begründe kurz auf Deutsch. Das Wort \"dringend\" des Mieters allein ist kein Grund.\n- language: Sprache der E-Mail (de oder en). reason und urgency_hint_reason immer auf Deutsch.\n"
+      },
+      {
+        "role": "user",
+        "content": "Betreff: Water damage kitchen\nAbsender: (unbekannt)\n\nHello, since yesterday water is leaking under our kitchen sink and the cabinet is already swollen. We live at Musterstrasse 12, 2nd floor left. Please send someone. Best regards, Max Mustermann\n"
+      }
+    ]
+  },
+  "response": {
+    "id": "chatcmpl-f8322f8c-6e81-46fd-900b-8f311b76ca4d",
+    "model": "openai/gpt-oss-120b",
+    "usage": {
+      "queue_time": 0.022396938,
+      "prompt_tokens": 816,
+      "prompt_time": 0.022740132,
+      "completion_tokens": 661,
+      "completion_time": 1.938188746,
+      "total_tokens": 1477,
+      "total_time": 1.960928878,
+      "prompt_tokens_details": {
+        "cached_tokens": 512
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 488
+      }
+    },
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"classification\":{\"type\":\"SCHADENMELDUNG\",\"category\":\"Wasserschaden\",\"trade\":\"Sanitär\",\"confidence\":0.99,\"reason\":\"Wasserschaden in der Küche, Leck unter der Spüle\"},\"extraction\":{\"tenant_name\":null,\"sender_name\":\"Max Mustermann\",\"street_raw\":\"Musterstrasse\",\"house_no\":\"12\",\"floor_raw\":\"2nd floor\",\"side_raw\":\"left\",\"room\":null,\"damage_description\":\"water is leaking under our kitchen sink and the cabinet is already swollen\",\"since\":\"yesterday\",\"photos_mentioned\":false,\"phone\":null,\"language\":\"en\"},\"urgency_hint\":\"DRINGEND\",\"urgency_hint_reason\":\"Das Wasserleck kann zu weiteren Schäden führen, daher sollte zeitnah ein Handwerker kommen.\"}",
+          "reasoning": "We need to extract fields.\n\nEmail is English? The body is English. language: en.\n\nWe need tenant_name: the contract holder the mail refers to. It says \"We live at Musterstrasse 12, 2nd floor left.\" No explicit tenant name. So tenant_name null. sender_name: Max Mustermann.\n\nstreet_raw: \"Musterstrasse\". house_no: \"12\". floor_raw: \"2nd floor\". side_raw: \"left\". room: null? Could be kitchen but not required. damage_description: \"water is leaking under our kitchen sink and the cabinet is already swollen\". Since: \"yesterday\". photos_mentioned: false (no mention). phone: null.\n\nclassification: type = SCHADENMELDUNG. category: \"Wasserschaden\" (water damage). trade: maybe \"Sanitär\". confidence: we need a number, maybe 0.99. reason: \"Wasserschaden in der Küche, Leck unter Spüle\". Provide German reason.\n\nurgency_hint: DRINGEND? It's leaking, cabinet swollen, but not immediate danger. Could be DRINGEND because damage progresses. Provide urgency_hint_reason: \"Das Wasserleck kann zu weiteren Schäden führen, daher sollte zeitnah ein Handwerker kommen.\"\n\nCheck schema: classification includes category, trade, confidence, reason, type. All required.\n\nextraction includes many fields, all required.\n\nurgency_hint can be null but we provide DRINGEND.\n\nNow produce compact JSON.\n\nLet's craft.\n\n{\n \"classification\":{\"type\":\"SCHADENMELDUNG\",\"category\":\"Wasserschaden\",\"trade\":\"Sanitär\",\"confidence\":0.99,\"reason\":\"Wasserschaden in der Küche, Leck unter der Spüle\"},\n \"extraction\":{\"tenant_name\":null,\"sender_name\":\"Max Mustermann\",\"street_raw\":\"Musterstrasse\",\"house_no\":\"12\",\"floor_raw\":\"2nd floor\",\"side_raw\":\"left\",\"room\":null,\"damage_description\":\"water is leaking under our kitchen sink and the cabinet is already swollen\",\"since\":\"yesterday\",\"photos_mentioned\":false,\"phone\":null,\"language\":\"en\"},\n \"urgency_hint\":\"DRINGEND\",\n \"urgency_hint_reason\":\"Das Wasserleck kann zu weiteren Schäden führen, daher sollte zeitnah ein Handwerker kommen.\"\n}\n\nCheck JSON validity. All strings quoted. Good."
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ]
+  }
+}

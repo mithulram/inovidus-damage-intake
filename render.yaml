@@ -1,0 +1,63 @@
+# Render Blueprint – hosted demo (free plan), created from the Render dashboard ("New → Blueprint").
+# Secrets live only in the Render dashboard (service → Environment), never in git.
+services:
+  - type: web
+    name: inovidus-intake
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install uv==0.12.8 && uv sync --frozen --no-dev
+    startCommand: uv run --no-dev intake-ui
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: INTAKE_HOST
+        value: 0.0.0.0
+      - key: LLM_PROVIDER
+        value: offline             # no API key on the host; "Groq · Aufzeichnung" selectable in the UI
+      - key: INTAKE_ACCESS_PASSWORD
+        generateValue: true        # shared demo password for people (any user name, e.g. "demo")
+      - key: INTAKE_SERVICE_TOKEN
+        generateValue: true        # n8n uses the same value (see below)
+
+  - type: web
+    name: inovidus-n8n
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./deploy/n8n/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: INTAKE_API_URL
+        value: https://inovidus-intake.onrender.com   # adjust if Render assigns a different URL
+      - key: INTAKE_SERVICE_TOKEN
+        fromService:
+          type: web
+          name: inovidus-intake
+          envVarKey: INTAKE_SERVICE_TOKEN
+      - key: INTAKE_WEBHOOK_TOKEN
+        generateValue: true        # callers send it as header X-Webhook-Token
+      - key: N8N_OWNER_EMAIL
+        value: owner@intake-demo.example
+      - key: N8N_OWNER_PASSWORD
+        generateValue: true
+      - key: N8N_HOST
+        value: 0.0.0.0
+      - key: N8N_PROTOCOL
+        value: https
+      - key: N8N_DIAGNOSTICS_ENABLED
+        value: "false"
+      - key: N8N_VERSION_NOTIFICATIONS_ENABLED
+        value: "false"
+      - key: N8N_TEMPLATES_ENABLED
+        value: "false"
+      - key: N8N_DEFAULT_LOCALE
+        value: en                  # also forced in deploy/n8n/start.sh
+      - key: GENERIC_TIMEZONE
+        value: Europe/Berlin
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=288   # forced in deploy/n8n/start.sh (512 MB free plan incl. task runner)
+      - key: EXECUTIONS_DATA_PRUNE
+        value: "true"

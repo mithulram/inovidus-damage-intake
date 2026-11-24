@@ -1,0 +1,47 @@
+{
+  "request": {
+    "model": "openai/gpt-oss-120b",
+    "response_format": "json_schema strict",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Du liest E-Mails an eine Hausverwaltung und gibst NUR die geforderten Felder als JSON zurück.\nRegeln:\n- Kopiere Adresse, Etage und Seite WÖRTLICH aus der E-Mail (z. B. \"Musterstr.\", \"zweite Etage\", \"links\"). Nicht umrechnen, nicht ergänzen, nicht raten.\n- tenant_name = der Vertragsinhaber, auf den sich die Mail bezieht (z. B. \"Wohnung von X\"); sonst der Unterzeichner. sender_name = wer unterschreibt.\n- Fehlt eine Angabe, setze null. Erfinde keine Daten.\n- type: SCHADENMELDUNG (Schaden/Mangel), ANFRAGE_MIETE (Miete, Nebenkosten, Kaution), SONSTIGES.\n- category (deutsch): z. B. Wasserschaden, Rohrbruch, Rohrverstopfung, Gasgeruch, Heizungsausfall, Elektrik, Schimmel, Fenster/Türen. trade: Gewerk (z. B. Sanitär).\n- urgency_hint: NOTFALL (Gefahr für Menschen/Gebäude), DRINGEND (Schaden schreitet fort), NORMAL. Begründe kurz auf Deutsch. Das Wort \"dringend\" des Mieters allein ist kein Grund.\n- language: Sprache der E-Mail (de oder en). reason und urgency_hint_reason immer auf Deutsch.\n"
+      },
+      {
+        "role": "user",
+        "content": "Betreff: Wasserschaden in der Küche\nAbsender: erika.muster@example.net\n\nGuten Tag, ich melde mich für meinen Partner. In der Wohnung von Max Mustermann, Musterstr. 12, 2. OG li., läuft seit heute Morgen Wasser unter der Spüle aus. Viele Grüße, Erika Muster\n"
+      }
+    ]
+  },
+  "response": {
+    "id": "chatcmpl-2a558a90-2884-477f-a5ec-3e474e6ea53b",
+    "model": "openai/gpt-oss-120b",
+    "usage": {
+      "queue_time": 0.019430998,
+      "prompt_tokens": 827,
+      "prompt_time": 0.023259733,
+      "completion_tokens": 759,
+      "completion_time": 2.588311701,
+      "total_tokens": 1586,
+      "total_time": 2.611571434,
+      "prompt_tokens_details": {
+        "cached_tokens": 512
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 572
+      }
+    },
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"classification\":{\"type\":\"SCHADENMELDUNG\",\"category\":\"Wasserschaden\",\"trade\":\"Sanitär\",\"confidence\":1.0,\"reason\":\"Wasserschaden in der Küche, Wasser läuft seit heute Morgen unter der Spüle aus.\"},\"extraction\":{\"tenant_name\":\"Max Mustermann\",\"sender_name\":\"Erika Muster\",\"street_raw\":\"Musterstr.\",\"house_no\":\"12\",\"floor_raw\":\"2. OG\",\"side_raw\":\"li.\",\"room\":\"Küche\",\"damage_description\":\"Wasser läuft seit heute Morgen unter der Spüle aus.\",\"since\":\"seit heute Morgen\",\"photos_mentioned\":false,\"phone\":null,\"language\":\"de\"},\"urgency_hint\":\"DRINGEND\",\"urgency_hint_reason\":\"Wasser läuft unter der Spüle aus und kann weitere Schäden verursachen, daher sollte es zügig behoben werden.\"}",
+          "reasoning": "We need to extract fields.\n\nEmail content: Subject: Wasserschaden in der Küche. Sender email erika.muster@example.net.\n\nText: \"Guten Tag, ich melde mich für meinen Partner. In der Wohnung von Max Mustermann, Musterstr. 12, 2. OG li., läuft seit heute Morgen Wasser unter der Spüle aus. Viele Grüße, Erika Muster\"\n\nWe need:\n\ntenant_name = Vertragsinhaber, \"Wohnung von Max Mustermann\" => tenant_name = \"Max Mustermann\"? The rule: tenant_name = der Vertragsinhaber, auf den sich die Mail bezieht (z. B. \"Wohnung von X\"); sonst der Unterzeichner. So tenant_name = \"Max Mustermann\". sender_name = who signs: \"Erika Muster\".\n\nstreet_raw: \"Musterstr.\" (copy verbatim). house_no: \"12\". floor_raw: \"2. OG\". side_raw: \"li.\" (left). room: maybe \"Küche\"? The email mentions \"Wasserschaden in der Küche\". So room = \"Küche\". damage_description: \"läuft seit heute Morgen Wasser unter der Spüle aus.\" Could be \"Wasser läuft unter der Spüle aus\". We'll set description accordingly. since: \"heute Morgen\". Could be \"seit heute Morgen\". We'll set \"seit heute Morgen\". photos_mentioned: not mentioned, so false. phone: not mentioned => null. language: de.\n\nclassification: type = SCHADENMELDUNG. category: \"Wasserschaden\". trade: likely \"Sanitär\". confidence: we need a number; not specified but we can set 1.0. reason: \"Wasserschaden in der Küche, Wasser läuft unter der Spüle aus\". Provide reason in German.\n\nurgency_hint: Not a NOTFALL, not necessarily DRINGEND unless damage continues. It's water leak, could cause damage but not immediate danger. Probably DRINGEND? The rule: urgency_hint based on situation, not just tenant's word. Water leak can cause damage, but not immediate danger. Could be DRINGEND because damage may spread. Let's set \"DRINGEND\". urgency_hint_reason: \"Wasser läuft unter der Spüle aus und kann weitere Schäden verursachen, daher sollte es zügig behoben werden.\"\n\nNow construct JSON with required fields.\n\nCheck schema: classification object with type, category, trade, confidence, reason. All required.\n\nextraction object with fields: damage_description, floor_raw, house_no, language, phone, photos_mentioned, room, sender_name, side_raw, since, street_raw, tenant_name. All required.\n\nurgency_hint and urgency_hint_reason.\n\nMake sure null values are null not omitted.\n\nNow produce compact JSON.\n\n"
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ]
+  }
+}

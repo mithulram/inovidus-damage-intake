@@ -1,0 +1,31 @@
+{
+  "_hinweis": "Bestehende Vorgänge. 'Rohrverstopfung Küche' für MV-10245 stammt aus der Aufgabe; Datum, Handwerker und der zweite Vorgang sind ergänzte Testdaten.",
+  "cases": [
+    {
+      "case_id": "VG-2026-0412",
+      "contract_id": "MV-10245",
+      "unit_id": "OBJ-MS12-2L",
+      "title": "Rohrverstopfung Küche",
+      "category": "Rohrverstopfung",
+      "room": "Küche",
+      "state": "closed",
+      "opened_at": "2026-08-03",
+      "closed_at": "2026-08-05",
+      "resolution": "Abfluss unter der Spüle gereinigt",
+      "contractor": "Sanitär Beispiel GmbH"
+    },
+    {
+      "case_id": "VG-2026-0377",
+      "contract_id": "MV-10487",
+      "unit_id": "OBJ-MS12-3R",
+      "title": "Fenster undicht Wohnzimmer",
+      "category": "Fenster",
+      "room": "Wohnzimmer",
+      "state": "closed",
+      "opened_at": "2026-06-11",
+      "closed_at": "2026-06-20",
+      "resolution": "Dichtung erneuert",
+      "contractor": "Fensterbau Beispiel"
+    }
+  ]
+}

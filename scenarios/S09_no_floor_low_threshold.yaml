@@ -1,0 +1,14 @@
+id: S9
+title: Schwelle gesenkt, Etage fehlt
+description: Mit Schwelle 0.65 würde MV-10245 (0.70) reichen – aber ohne Etage wird nie geraten.
+rule_overrides:
+  match: { threshold: 0.65 }
+email:
+  subject: "Wasser unter der Spüle"
+  body: |
+    Hallo, bei uns läuft Wasser unter der Spüle aus. Musterstraße 12, links. Max Mustermann
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  winner: MV-10245
+  failed_gates: [floor_missing]

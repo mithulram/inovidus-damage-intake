@@ -1,0 +1,14 @@
+id: S7
+title: Nachricht auf Englisch
+description: '"2nd floor" – britisch = 2. OG, US = 1. OG. Standard: nachfragen (Regel normalize.english_floor_counting).'
+email:
+  subject: "Water damage kitchen"
+  body: |
+    Hello, since yesterday water is leaking under our kitchen sink and the cabinet is already swollen. We live at Musterstrasse 12, 2nd floor left. Please send someone. Best regards, Max Mustermann
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  winner: MV-10245
+  urgency: DRINGEND
+  failed_gates: [floor_ambiguous]
+  reply_language: en

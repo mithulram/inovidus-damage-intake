@@ -1,0 +1,44 @@
+{
+  "request": {
+    "model": "openai/gpt-oss-120b",
+    "response_format": "json_schema strict",
+    "messages": [
+      {
+        "role": "system",
+        "content": "Du liest E-Mails an eine Hausverwaltung und gibst NUR die geforderten Felder als JSON zurück.\nRegeln:\n- Kopiere Adresse, Etage und Seite WÖRTLICH aus der E-Mail (z. B. \"Musterstr.\", \"zweite Etage\", \"links\"). Nicht umrechnen, nicht ergänzen, nicht raten.\n- tenant_name = der Vertragsinhaber, auf den sich die Mail bezieht (z. B. \"Wohnung von X\"); sonst der Unterzeichner. sender_name = wer unterschreibt.\n- Fehlt eine Angabe, setze null. Erfinde keine Daten.\n- type: SCHADENMELDUNG (Schaden/Mangel), ANFRAGE_MIETE (Miete, Nebenkosten, Kaution), SONSTIGES.\n- category (deutsch): z. B. Wasserschaden, Rohrbruch, Rohrverstopfung, Gasgeruch, Heizungsausfall, Elektrik, Schimmel, Fenster/Türen. trade: Gewerk (z. B. Sanitär).\n- urgency_hint: NOTFALL (Gefahr für Menschen/Gebäude), DRINGEND (Schaden schreitet fort), NORMAL. Begründe kurz auf Deutsch. Das Wort \"dringend\" des Mieters allein ist kein Grund.\n- language: Sprache der E-Mail (de oder en). reason und urgency_hint_reason immer auf Deutsch.\n"
+      },
+      {
+        "role": "user",
+        "content": "Betreff: Frage zur Mieterhöhung\nAbsender: (unbekannt)\n\nGuten Tag, ich habe eine Frage zur Mieterhöhung ab Januar. Ist der neue Betrag schon in der Lastschrift berücksichtigt? Musterstr. 12, 2. OG links. Viele Grüße, Max Mustermann\n"
+      }
+    ]
+  },
+  "response": {
+    "id": "chatcmpl-d5be4977-2c4c-4c73-b70a-0ed1969da6a4",
+    "model": "openai/gpt-oss-120b",
+    "usage": {
+      "queue_time": 0.156555578,
+      "prompt_tokens": 819,
+      "prompt_time": 0.089699252,
+      "completion_tokens": 516,
+      "completion_time": 1.084237863,
+      "total_tokens": 1335,
+      "total_time": 1.173937115,
+      "completion_tokens_details": {
+        "reasoning_tokens": 376
+      }
+    },
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"classification\":{\"type\":\"ANFRAGE_MIETE\",\"category\":null,\"trade\":null,\"confidence\":1.0,\"reason\":\"Frage zur Mieterhöhung\"},\"extraction\":{\"tenant_name\":\"Max Mustermann\",\"sender_name\":\"Max Mustermann\",\"street_raw\":\"Musterstr.\",\"house_no\":\"12\",\"floor_raw\":\"2. OG\",\"side_raw\":\"links\",\"room\":null,\"damage_description\":null,\"since\":null,\"photos_mentioned\":false,\"phone\":null,\"language\":\"de\"},\"urgency_hint\":\"NORMAL\",\"urgency_hint_reason\":\"Keine Gefahr für Personen oder Gebäude, keine akute Fortsetzung des Schadens\"}",
+          "reasoning": "We need to extract fields.\n\nEmail content: Subject: Frage zur Mieterhöhung (question about rent increase). So type: ANFRAGE_MIETE.\n\nCategory: probably null (no damage). trade null.\n\nconfidence: we need a number; not specified but we must include. Probably 1.0.\n\nreason: classification reason: \"Frage zur Mieterhöhung\" (German). Provide reason.\n\nExtraction fields:\n\ntenant_name: \"Mietvertrag\"? The email refers to \"Musterstr. 12, 2. OG links.\" No tenant name given. The sender is Max Mustermann. So tenant_name: null? The rule: tenant_name = der Vertragsinhaber, auf den sich die Mail bezieht (z. B. \"Wohnung von X\"); sonst der Unterzeichner. So if no tenant name, use sender. So tenant_name = \"Max Mustermann\". sender_name = \"Max Mustermann\". (Both same.)\n\nstreet_raw: \"Musterstr.\" (copy verbatim). house_no: \"12\". floor_raw: \"2. OG\". side_raw: \"links\". room: null (not mentioned). damage_description: null. since: null. photos_mentioned: false (no mention). phone: null. language: de.\n\nurgency_hint: likely NORMAL. Reason: \"Es handelt sich um eine allgemeine Frage zur Mieterhöhung, keine Gefahr.\" Provide German.\n\nurgency_hint_reason: \"Keine Gefahr für Personen oder Gebäude, keine akute Fortsetzung des Schadens.\"\n\nNow produce JSON with required fields.\n\nCheck schema: classification includes category (null), confidence (number), reason (string), trade (null), type (ANFRAGE_MIETE). extraction includes all fields.\n\nurgency_hint can be null or string; we set \"NORMAL\". urgency_hint_reason string.\n\nNow produce compact JSON.\n\n"
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ]
+  }
+}

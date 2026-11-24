@@ -1,0 +1,135 @@
+# Reading translations for the example e-mails (UI language switch only – never sent, never used for decisions).
+# Each scenario: English title/description and the e-mail in the OTHER language (German → English, S7 English → German).
+# "phrases": German sentence → English, so the extracted "Beschreibung" (one sentence of the e-mail) can be shown in English too.
+scenarios:
+  S1:
+    title: Original e-mail from the task
+    description: Two active contracts for Max Mustermann at Musterstraße 12 – only "second floor left" decides.
+    email: &s1
+      language: en
+      subject: Water damage kitchen, Musterstraße 12
+      body: "Hello, since yesterday water has been leaking under our sink. The kitchen base cabinet is already swollen. We live at Musterstr. 12, second floor left. Please send someone urgently. Photos are available. Best regards, Max Mustermann"
+  S2:
+    title: Without floor and side
+    description: Same message without "second floor left" – two contracts fit equally well.
+    email:
+      language: en
+      subject: Water damage kitchen, Musterstraße 12
+      body: "Hello, since yesterday water has been leaking under our sink. The kitchen base cabinet is already swollen. We live at Musterstr. 12. Please send someone urgently. Photos are available. Best regards, Max Mustermann"
+  S3:
+    title: Contract MV-10245 inactive
+    description: The unit is recognised, but the contract has ended. No switching to MV-10487.
+    email: *s1
+  S3b:
+    title: Inactive and active contract on the same floor, side missing
+    description: The inactive contract stays in the comparison – the active neighbouring flat is NOT chosen automatically.
+    email:
+      language: en
+      subject: Water under the sink
+      body: "Hello, water is leaking under the sink at our place. We live at Musterstr. 12, 2nd floor. Best regards, Max Mustermann"
+  S4a:
+    title: Name spelled differently
+    description: '"M. Musterman" – similar, but not the same. The sender is the registered address and the points are enough, but it still needs review.'
+    email:
+      language: en
+      subject: Water damage kitchen
+      body: "Hello, since yesterday water has been leaking under our sink. We live at Musterstr. 12, second floor left. Best regards, M. Musterman"
+  S4b:
+    title: Partner reports for the tenant
+    description: The unit is clear, but the sender is not the contract holder.
+    email:
+      language: en
+      subject: Water damage in the kitchen
+      body: "Good day, I am writing for my partner. In Max Mustermann's flat, Musterstr. 12, 2nd floor left, water has been leaking under the sink since this morning. Best regards, Erika Muster"
+  S4c:
+    title: Right tenant, unknown e-mail address
+    description: Everything fits, but the e-mail comes from a private address. The case worker decides – with a warning and three options.
+    email: *s1
+  S5a:
+    title: Emergency – burst pipe
+    description: Water is coming through the ceiling. Emergency with safety instructions, unit is clear.
+    email:
+      language: en
+      subject: EMERGENCY burst pipe
+      body: "Help, a pipe has burst at our place, the water is coming through the ceiling into the bathroom! Musterstr. 12, 2nd floor left. Max Mustermann"
+  S5b:
+    title: Emergency – gas smell, unit unclear
+    description: An emergency goes straight to the top of the list. The building is known, the unit is not – actions only at building level.
+    email:
+      language: en
+      subject: Gas smell!
+      body: "There is a strong smell of gas in the stairwell of Musterstraße 12. Please come quickly. Max Mustermann"
+  S6:
+    title: Not a damage report – question about the rent
+    description: Recognised and forwarded to rent accounting. No damage task.
+    email:
+      language: en
+      subject: Question about the rent increase
+      body: "Good day, I have a question about the rent increase from January. Is the new amount already included in the direct debit? Musterstr. 12, 2nd floor left. Best regards, Max Mustermann"
+  S7:
+    title: Message in English
+    description: '"2nd floor" – British = 2. OG, US = 1. OG. Default: ask the tenant (rule normalize.english_floor_counting).'
+    email:
+      language: de
+      subject: Wasserschaden Küche
+      body: "Hallo, seit gestern läuft Wasser unter unserer Küchenspüle aus und der Schrank ist bereits aufgequollen. Wir wohnen in der Musterstraße 12, 2nd floor links. Bitte schicken Sie jemanden. Viele Grüße, Max Mustermann"
+  S8:
+    title: Threshold lowered, other building
+    description: Even with threshold 0.65 another building may never become "unambiguous" – the address contradicts (veto).
+    email:
+      language: en
+      subject: Water in the kitchen
+      body: "Hello, water is leaking under the sink at our place. Musterstraße 16, 2nd floor left. Max Mustermann"
+  S9:
+    title: Threshold lowered, floor missing
+    description: With threshold 0.65, MV-10245 (0.70) would be enough – but without a floor the system never guesses.
+    email:
+      language: en
+      subject: Water under the sink
+      body: "Hello, water is leaking under the sink at our place. Musterstraße 12, left. Max Mustermann"
+  S10:
+    title: Heating failure in November
+    description: In the heating season (Oct–Apr) a heating failure is an emergency – rule in rules.yaml.
+    email:
+      language: en
+      subject: Heating has failed
+      body: "Good morning, since last night the heating has failed, the flat is cold. Musterstr. 12, 3rd floor right. Max Mustermann"
+
+phrases:
+  "Hallo, seit gestern läuft Wasser unter unserer Spüle aus.": "Hello, since yesterday water has been leaking under our sink."
+  "seit gestern läuft Wasser unter unserer Spüle aus.": "since yesterday water has been leaking under our sink."
+  "seit gestern läuft Wasser unter unserer Spüle aus": "since yesterday water has been leaking under our sink"
+  "Der Küchenunterschrank ist bereits aufgequollen.": "The kitchen base cabinet is already swollen."
+  "Hallo, bei uns läuft Wasser unter der Spüle aus.": "Hello, water is leaking under the sink at our place."
+  "bei uns läuft Wasser unter der Spüle aus.": "water is leaking under the sink at our place."
+  "OG li., läuft seit heute Morgen Wasser unter der Spüle aus.": "2nd floor left, water has been leaking under the sink since this morning."
+  "läuft seit heute Morgen Wasser unter der Spüle aus.": "water has been leaking under the sink since this morning."
+  "Hilfe, bei uns ist ein Rohr geplatzt, das Wasser kommt durch die Decke ins Badezimmer!": "Help, a pipe has burst at our place, the water is coming through the ceiling into the bathroom!"
+  "Im Treppenhaus der Musterstraße 12 riecht es stark nach Gas.": "There is a strong smell of gas in the stairwell of Musterstraße 12."
+  "Guten Tag, ich habe eine Frage zur Mieterhöhung ab Januar.": "Good day, I have a question about the rent increase from January."
+  "Ist der neue Betrag schon in der Lastschrift berücksichtigt?": "Is the new amount already included in the direct debit?"
+  "Guten Morgen, seit heute Nacht ist die Heizung ausgefallen, die Wohnung ist kalt.": "Good morning, since last night the heating has failed, the flat is cold."
+  "seit heute Nacht ist die Heizung ausgefallen, die Wohnung ist kalt.": "since last night the heating has failed, the flat is cold."
+  "Fenster undicht Wohnzimmer": "Window leaking, living room"
+  "Rohrverstopfung Küche": "Blocked pipe, kitchen"
+  "seit gestern": "since yesterday"
+  "seit heute Morgen": "since this morning"
+  "seit heute morgen": "since this morning"
+  "seit heute Nacht": "since last night"
+  "seit heute nacht": "since last night"
+  "seit heute": "since today"
+  "seit letzter Woche": "since last week"
+  "zweite Etage": "second floor"
+  "dritte Etage": "third floor"
+  "erste Etage": "first floor"
+  "Erdgeschoss": "ground floor"
+  "2. Etage": "2nd floor"
+  "3. Etage": "3rd floor"
+  "2. OG": "2nd floor (German count)"
+  "3. OG": "3rd floor (German count)"
+  "2. OG li.": "2nd floor left"
+  "li.": "left"
+  "re.": "right"
+  "links": "left"
+  "rechts": "right"
+  "Mitte": "centre"

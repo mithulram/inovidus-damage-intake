@@ -1,0 +1,25 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml
+node_modules/
+.DS_Store
+*.log
+
+# --- personal notes, never published ---
+TASK.md
+KICKOFF_PROMPT.md
+private/
+
+# --- runtime state ---
+var/
+.n8n-local/
+*.sqlite
+*.db
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/

@@ -1,0 +1,14 @@
+id: S4b
+title: Partnerin meldet für den Mieter
+description: Die Einheit ist klar, aber die Absenderin ist nicht Vertragsinhaberin.
+email:
+  subject: "Wasserschaden in der Küche"
+  sender_email: erika.muster@example.net
+  body: |
+    Guten Tag, ich melde mich für meinen Partner. In der Wohnung von Max Mustermann, Musterstr. 12, 2. OG li., läuft seit heute Morgen Wasser unter der Spüle aus. Viele Grüße, Erika Muster
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  winner: MV-10245
+  urgency: DRINGEND
+  failed_gates: [identity]

@@ -1,0 +1,14 @@
+id: S5b
+title: Notfall – Gasgeruch, Einheit unklar
+description: Notfall geht sofort nach oben in die Liste. Objekt ist bekannt, Einheit nicht – Maßnahmen nur auf Gebäude-Ebene.
+email:
+  subject: "Gasgeruch!"
+  body: |
+    Im Treppenhaus der Musterstraße 12 riecht es stark nach Gas. Bitte schnell kommen. Max Mustermann
+expected:
+  status: NEEDS_REVIEW
+  contract: null
+  urgency: NOTFALL
+  failed_gates: [floor_missing, threshold, margin]
+  safety_instructions: true
+  task_scope: object

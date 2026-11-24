@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Schadenmeldungen · Prüfplatz</title>
+  <meta name="description" content="Prototyp: KI-gestützte Verarbeitung von Schadenmeldungen mit nachvollziehbarer ERP-Zuordnung und menschlicher Freigabe.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231f3a8a'/%3E%3Cpath d='M8 9h16M8 15h16M8 21h10' stroke='%23fff6c9' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="7" stroke="currentColor" stroke-width="2"/>
+      </pattern>
+    </defs>
+    <symbol id="i-match" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-partial" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="3 2.4"/></symbol>
+    <symbol id="i-missing" viewBox="0 0 16 16"><path d="M4 8h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-mismatch" viewBox="0 0 16 16"><path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 16 16"><path d="M8 1.8L15 14H1z" fill="currentColor"/><path d="M8 6v4" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><circle cx="8" cy="12" r="1" fill="#fff"/></symbol>
+    <symbol id="i-review" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 4.6v4M8 11.2v.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-ready" viewBox="0 0 16 16"><rect x="1.8" y="1.8" width="12.4" height="12.4" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.8 8.3l2.2 2.2 4.4-4.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-route" viewBox="0 0 16 16"><path d="M2.5 8h10M9 4.5L12.5 8 9 11.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5" y="5" width="8.5" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 11V3.5A1.5 1.5 0 0 1 4.5 2H10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 16 16"><path d="M4.2 1.8l2.3 2.7-1.4 1.7a8.6 8.6 0 0 0 4.7 4.7l1.7-1.4 2.7 2.3-1.3 2.3C8 14.2 1.8 8 1.9 3.1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 16 16"><rect x="1.8" y="3.5" width="12.4" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M2.5 4.5L8 9l5.5-4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  </svg>
+
+  <header class="shell-bar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name" data-t="brand">Schadenmeldungen</span>
+      <span class="brand-sub" data-t="brandSub">Prüfplatz · Prototyp</span>
+    </div>
+    <nav class="views" aria-label="Ansichten">
+      <button class="view-tab" data-view="case" aria-current="page" data-t="tabCase">Vorgang</button>
+      <button class="view-tab" data-view="rules" data-t="tabRules">Regeln</button>
+      <button class="view-tab" data-view="audit" data-t="tabAudit">Protokoll</button>
+      <button class="view-tab" data-view="flow" data-t="tabFlow">Ablauf</button>
+    </nav>
+    <div class="bar-right">
+      <label class="reader">
+        <span data-t="reader">Leser</span>
+        <select id="provider" aria-label="Leser / Reader">
+          <option value="offline" data-t="provOffline">Regeln (ohne KI)</option>
+          <option value="recorded" data-t="provRecorded">Groq · Aufzeichnung</option>
+          <option value="groq" data-t="provGroq">Groq · live</option>
+        </select>
+      </label>
+      <label class="reader">
+        <span data-t="lang">Sprache</span>
+        <select id="lang" aria-label="Sprache / Language">
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+          <option value="both">English + Deutsch</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="inbox" aria-label="Posteingang">
+      <div class="inbox-head">
+        <h2 data-t="inbox">Posteingang</h2>
+        <div class="segmented" role="tablist" aria-label="Quelle">
+          <button role="tab" aria-selected="true" data-source="demo" data-t="srcDemo">Beispiele</button>
+          <button role="tab" aria-selected="false" data-source="store" data-t="srcStore">Prüfliste</button>
+        </div>
+      </div>
+      <p class="inbox-note" id="inbox-note">Dringendes steht oben.</p>
+      <ol class="inbox-list" id="inbox-list" aria-live="polite"></ol>
+      <button class="ghost-btn new-mail" id="new-mail"><svg><use href="#i-plus"/></svg><span data-t="newMail">Eigene E-Mail prüfen</span></button>
+    </aside>
+
+    <main class="desk" id="desk" tabindex="-1">
+      <section class="view" data-view="case" id="view-case"></section>
+      <section class="view" data-view="rules" id="view-rules" hidden></section>
+      <section class="view" data-view="audit" id="view-audit" hidden></section>
+      <section class="view" data-view="flow" id="view-flow" hidden></section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

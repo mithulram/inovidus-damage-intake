@@ -1,0 +1,811 @@
+{
+  "name": "Damage report – AI-assisted intake (Schadenmeldung – KI-gestützte Erfassung)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "schadenmeldung",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "id": "300175ef-be05-4c26-aec6-5d45c6838795",
+      "name": "E-mail received (E-Mail eingegangen)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        460
+      ],
+      "webhookId": "3b445fcc-0208-442a-8bf4-ce9f0149c01a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "intakeWebhookTk1",
+          "name": "Intake Webhook Token"
+        }
+      },
+      "notes": "EN: Start of the demo. Accepts an e-mail as JSON (subject, body, sender_email). Protected: without the X-Webhook-Token header the call is refused (403).\nDE: Startpunkt der Demo. Nimmt eine E-Mail als JSON an (subject, body, sender_email). Geschützt: ohne Header X-Webhook-Token wird der Aufruf abgelehnt (403)."
+    },
+    {
+      "parameters": {
+        "mailbox": "INBOX",
+        "postProcessAction": "nothing",
+        "options": {}
+      },
+      "id": "585f377e-f775-4572-8933-1c70a49cd9ef",
+      "name": "Mailbox – production, switched off (Postfach – Produktion, aus)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [
+        0,
+        660
+      ],
+      "disabled": true,
+      "notes": "EN: How e-mails would arrive in production (IMAP / Microsoft 365). Switched off on purpose – in the demo everything comes in through the webhook.\nDE: So kämen E-Mails in Produktion herein (IMAP / Microsoft 365). Absichtlich ausgeschaltet – in der Demo kommt alles über den Webhook."
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c52a6139-f674-4602-84df-afb8dacef928",
+              "name": "email",
+              "type": "object",
+              "value": "={{ { subject: $json.body.subject || '', body: $json.body.body || $json.body.text || '', sender_email: $json.body.sender_email || $json.body.from || null, sender_display_name: $json.body.sender_display_name || $json.body.from_name || null, message_id: $json.body.message_id || null, received_at: $json.body.received_at || null, attachments: $json.body.attachments || [] } }}"
+            },
+            {
+              "id": "1b7d400c-71f3-47c5-a56a-c723c68c9b03",
+              "name": "provider",
+              "type": "string",
+              "value": "={{ $json.body.provider || 'offline' }}"
+            },
+            {
+              "id": "e9c09945-82c0-490f-8618-44f962fe1c32",
+              "name": "scenario_id",
+              "type": "string",
+              "value": "={{ $json.body.scenario_id || '' }}"
+            },
+            {
+              "id": "api-url",
+              "name": "api_url",
+              "type": "string",
+              "value": "http://127.0.0.1:8000"
+            },
+            {
+              "id": "api-token",
+              "name": "api_token",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "509f45d4-0144-4a1e-a92d-2e4f8c6361d1",
+      "name": "Prepare e-mail (E-Mail vorbereiten)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        460
+      ],
+      "notes": "EN: Puts the e-mail into a fixed format and keeps the address of the Python service (api_url) and the reader (rules or Groq).\nDE: Bringt die E-Mail in ein festes Format und merkt sich die Adresse des Python-Dienstes (api_url) und den Leser (Regeln oder Groq)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_url + '/api/steps/understand' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.email, provider: $json.provider, scenario_id: $json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_token }}"
+            }
+          ]
+        }
+      },
+      "id": "21539838-ce09-4d91-a4bd-e87a9a8b50bb",
+      "name": "1 Understand – AI or rules (Verstehen – KI oder Regeln)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "EN: Step 1 – calls /api/steps/understand. The AI (or the rule mode) only reads: type of message, type of damage, name, address, floor, side.\nDE: Schritt 1 – ruft /api/steps/understand auf. Die KI (oder der Regelmodus) liest nur: Art der Nachricht, Schadenart, Name, Adresse, Etage, Seite."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_url + '/api/steps/match' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('Prepare e-mail (E-Mail vorbereiten)').item.json.provider, scenario_id: $('Prepare e-mail (E-Mail vorbereiten)').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_token }}"
+            }
+          ]
+        }
+      },
+      "id": "e8a6298a-1380-4e7f-894b-f989f4857246",
+      "name": "2 Match to contract (Zuordnung zum Vertrag)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "EN: Step 2 – calls /api/steps/match. Fixed rules give points per signal and check threshold, gap, contradictions (veto) and whether the contract is active. Unclear → review needed.\nDE: Schritt 2 – ruft /api/steps/match auf. Feste Regeln vergeben Punkte je Merkmal und prüfen Schwelle, Abstand, Widersprüche (Veto) und ob der Vertrag aktiv ist. Unklar → Prüfung nötig."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_url + '/api/steps/prior_cases' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('Prepare e-mail (E-Mail vorbereiten)').item.json.provider, scenario_id: $('Prepare e-mail (E-Mail vorbereiten)').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_token }}"
+            }
+          ]
+        }
+      },
+      "id": "f3bd09ab-34e8-4436-a775-464aa9ade2d9",
+      "name": "3 Earlier cases (Frühere Vorgänge)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "EN: Step 3 – calls /api/steps/prior_cases. Looks for earlier cases of the same flat (for example the same damage before).\nDE: Schritt 3 – ruft /api/steps/prior_cases auf. Sucht frühere Vorgänge derselben Wohnung (zum Beispiel denselben Schaden schon einmal)."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_url + '/api/steps/urgency' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('Prepare e-mail (E-Mail vorbereiten)').item.json.provider, scenario_id: $('Prepare e-mail (E-Mail vorbereiten)').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_token }}"
+            }
+          ]
+        }
+      },
+      "id": "acf1ca13-a426-4329-92d7-929df9c91bad",
+      "name": "4 Urgency (Dringlichkeit)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "EN: Step 4 – calls /api/steps/urgency. Rules set the minimum urgency; the AI may only raise it. In an emergency: safety instructions.\nDE: Schritt 4 – ruft /api/steps/urgency auf. Regeln setzen die Mindest-Dringlichkeit, die KI darf sie nur erhöhen. Im Notfall: Sicherheitshinweise."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_url + '/api/steps/draft' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('Prepare e-mail (E-Mail vorbereiten)').item.json.provider, scenario_id: $('Prepare e-mail (E-Mail vorbereiten)').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_token }}"
+            }
+          ]
+        }
+      },
+      "id": "078122ec-0614-4342-a03b-5f27946821da",
+      "name": "5 Reply draft – never sent (Antwortentwurf – wird nie gesendet)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "EN: Step 5 – calls /api/steps/draft. Writes a reply draft to the tenant. It is NEVER sent automatically.\nDE: Schritt 5 – ruft /api/steps/draft auf. Schreibt einen Antwortentwurf an den Mieter. Er wird NIE automatisch gesendet."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_url + '/api/steps/task' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ case: $json, provider: $('Prepare e-mail (E-Mail vorbereiten)').item.json.provider, scenario_id: $('Prepare e-mail (E-Mail vorbereiten)').item.json.scenario_id || null }) }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_token }}"
+            }
+          ]
+        }
+      },
+      "id": "be24ebb0-4af9-4cdc-b060-3ae5518d9451",
+      "name": "6 Internal task (Interne Aufgabe)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "EN: Step 6 – calls /api/steps/task. Prepares the internal task (for example a plumber) and the options for the case worker.\nDE: Schritt 6 – ruft /api/steps/task auf. Bereitet die interne Aufgabe vor (zum Beispiel Handwerker Sanitär) und die Optionen für die Sachbearbeitung."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "021da841-fb74-45dd-a991-4858c7c6803a",
+              "leftValue": "={{ $json.urgency.level }}",
+              "rightValue": "NOTFALL",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d8063bf9-83ac-4ad3-b31b-71d308275c32",
+      "name": "Emergency? (Notfall?)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        460
+      ],
+      "notes": "EN: Branch: is the urgency NOTFALL (emergency)? Yes → alert the on-call team (in production). n8n only reads this field – it decides nothing itself.\nDE: Verzweigung: ist die Dringlichkeit NOTFALL? Ja → Bereitschaft alarmieren (in Produktion). n8n liest nur dieses Feld – es entscheidet nichts selbst."
+    },
+    {
+      "parameters": {},
+      "id": "27dc0e85-b56b-4afd-ac92-b6b77ded3851",
+      "name": "Alert on-call team – production (Bereitschaft alarmieren – Produktion)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2480,
+        720
+      ],
+      "disabled": true,
+      "notes": "EN: In production this would alert the on-call team (for example by Teams or SMS). A placeholder in the demo.\nDE: In Produktion würde hier die Bereitschaft alarmiert (zum Beispiel per Teams oder SMS). In der Demo ein Platzhalter."
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "609d3054-1a10-450d-b019-679ec0c22043",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "READY_FOR_APPROVAL",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "clear (eindeutig)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "b070bb6f-aac8-42f4-a13b-7611155eb13b",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "NEEDS_REVIEW",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "review needed (Prüfung nötig)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "73aff110-4ccb-4e08-aef7-6c1372cacd3b",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "OUT_OF_SCOPE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "not a damage report (keine Schadenmeldung)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2fa54b8a-b8a1-44c5-a036-5c412006a34c",
+      "name": "Which status? (Welcher Status?)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        2480,
+        460
+      ],
+      "notes": "EN: Branch by status: ready for approval / review needed / not a damage report.\nDE: Verzweigung nach Status: bereit zur Freigabe / Prüfung nötig / keine Schadenmeldung."
+    },
+    {
+      "parameters": {},
+      "id": "41d9b40f-4d45-46d1-a21e-c05bb7020ed2",
+      "name": "Ready for approval (Bereit zur Freigabe)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        300
+      ],
+      "notes": "EN: Clear case: waits in the review list until a person approves it.\nDE: Eindeutiger Fall: wartet in der Prüfliste, bis ein Mensch ihn freigibt."
+    },
+    {
+      "parameters": {},
+      "id": "9d08ee5f-ba9c-4f2e-b192-61da94ce769e",
+      "name": "Question to tenant prepared (Rückfrage vorbereitet)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        460
+      ],
+      "notes": "EN: Unclear case: the reply draft asks the tenant (for example floor or side). A person checks it first.\nDE: Unklarer Fall: der Antwortentwurf fragt beim Mieter nach (zum Beispiel Etage oder Seite). Ein Mensch prüft ihn zuerst."
+    },
+    {
+      "parameters": {},
+      "id": "db063e4d-611d-44ba-aa90-d1b009915358",
+      "name": "Forward to the right team (An Fachstelle weiterleiten)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        2740,
+        620
+      ],
+      "notes": "EN: Not a damage report (for example a question about the rent): forwarded to the responsible team, no repair task.\nDE: Keine Schadenmeldung (zum Beispiel eine Frage zur Miete): wird an die zuständige Stelle weitergeleitet, keine Handwerkeraufgabe."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_url + '/api/cases' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-intake-token",
+              "value": "={{ $('Prepare e-mail (E-Mail vorbereiten)').item.json.api_token }}"
+            }
+          ]
+        }
+      },
+      "id": "87a15cfc-0150-4c11-ada6-496c4cfa7cd2",
+      "name": "Store in review list (In Prüfliste ablegen)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3000,
+        460
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "notes": "EN: Saves the finished case in the review list of the review desk (/api/cases). Only complete, sealed cases are accepted.\nDE: Speichert den fertigen Vorgang in der Prüfliste des Prüfplatzes (/api/cases). Nur vollständige, versiegelte Vorgänge werden angenommen."
+    },
+    {
+      "parameters": {
+        "content": "# Damage report – AI-assisted intake\n*(Schadenmeldung – KI-gestützte Erfassung)*\n\nAn e-mail runs through **six fixed steps**; each node calls exactly one step of the Python service (`/api/steps/…`). **n8n only routes – the service decides by the rules in `config/rules.yaml`.** Nothing happens until a person approves it in the review desk.\n\n*DE: Eine E-Mail läuft durch **sechs feste Schritte**; jeder Knoten ruft genau einen Schritt im Python-Dienst auf. **n8n leitet nur weiter – entschieden wird im Dienst nach `config/rules.yaml`.** Gehandelt wird erst nach menschlicher Freigabe im Prüfplatz.*",
+        "height": 280,
+        "width": 1180,
+        "color": 4
+      },
+      "id": "5b26bf36-349e-4987-85ef-e096b0be378a",
+      "name": "Title (Titel)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Incoming *(Eingang)*\nDemo: webhook (JSON with subject, body, sender_email). Production: mailbox node (IMAP / Microsoft 365) – switched off on purpose. “Prepare e-mail” holds the service address `api_url`.\n\n*DE: Demo: Webhook (JSON mit subject, body, sender_email). Produktion: Postfach (IMAP / Microsoft 365) – hier absichtlich aus. „E-Mail vorbereiten“ enthält die Dienst-Adresse `api_url`.*",
+        "height": 680,
+        "width": 500,
+        "color": 7
+      },
+      "id": "a88d70c1-b379-4ffc-9fd7-3850679c45d6",
+      "name": "Incoming (Eingang)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 1 Read *(Lesen)*\nThe AI (Groq) only reads: type, damage type, facts, urgency hint. The API key stays in the service. Without a key: rule mode.\n\n*DE: Die KI (Groq) liest nur: Art, Schadenart, Fakten, Dringlichkeits-Hinweis. Der Schlüssel bleibt im Dienst. Ohne Schlüssel: Regelmodus.*",
+        "height": 580,
+        "width": 300,
+        "color": 6
+      },
+      "id": "beca5215-8316-4418-bf03-c57c03756b71",
+      "name": "Read (Lesen)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        480,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 2–3 Match – fixed rules *(Zuordnen – feste Regeln)*\nPoints per signal · contradiction = veto · threshold · gap · contract active? Unclear → **review needed**. The AI never picks the contract. Plus earlier cases of the same unit.\n\n*DE: Punkte je Merkmal · Widerspruch = Veto · Schwelle · Abstand · Vertrag aktiv? Unklar → **Prüfung nötig**. Die KI wählt nie den Vertrag. Dazu frühere Vorgänge derselben Einheit.*",
+        "height": 580,
+        "width": 560,
+        "color": 5
+      },
+      "id": "5a5384e9-528b-423f-ae73-39e542d8cf82",
+      "name": "Match (Zuordnen)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        800,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## 4–6 Rate and prepare *(Einstufen und vorbereiten)*\nUrgency: rules set the minimum, the AI may only raise it. Reply and task are **drafted only – never sent**.\n\n*DE: Dringlichkeit: Regeln setzen die Untergrenze, die KI darf nur erhöhen. Antwort und Aufgabe werden **nur entworfen – nie gesendet**.*",
+        "height": 580,
+        "width": 780,
+        "color": 3
+      },
+      "id": "7a627c23-5959-41c2-94b7-4a4fe68d83f6",
+      "name": "Rate and prepare (Einstufen)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1380,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Routing *(Weiterleiten)*\nn8n only reads `status` and `urgency.level`. Everything lands in the review list; emergencies are at the top. n8n **never** calls `/api/approve`.\n\n*DE: n8n liest nur `status` und `urgency.level`. Alles landet in der Prüfliste; Notfälle stehen dort oben. `/api/approve` ruft n8n **nie** auf.*",
+        "height": 1060,
+        "width": 1020,
+        "color": 2
+      },
+      "id": "e9bc0c3f-1c21-47a8-9ae5-d25543fc3286",
+      "name": "Routing (Weiterleiten)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2180,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ received: true, case_id: $json.case_id, status: $json.status, urgency: $json.urgency ? $json.urgency.level : null }) }}",
+        "options": {}
+      },
+      "id": "ef1075ad-4f61-4a64-9342-faac78d8064e",
+      "name": "Reply to caller (Antwort an Aufrufer)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3260,
+        460
+      ],
+      "notes": "EN: Short receipt to whoever called the webhook: case ID, status, urgency. No personal data.\nDE: Kurze Quittung an den Aufrufer des Webhooks: Vorgangs-ID, Status, Dringlichkeit. Keine persönlichen Daten."
+    }
+  ],
+  "connections": {
+    "1 Understand – AI or rules (Verstehen – KI oder Regeln)": {
+      "main": [
+        [
+          {
+            "node": "2 Match to contract (Zuordnung zum Vertrag)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 Match to contract (Zuordnung zum Vertrag)": {
+      "main": [
+        [
+          {
+            "node": "3 Earlier cases (Frühere Vorgänge)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 Earlier cases (Frühere Vorgänge)": {
+      "main": [
+        [
+          {
+            "node": "4 Urgency (Dringlichkeit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 Urgency (Dringlichkeit)": {
+      "main": [
+        [
+          {
+            "node": "5 Reply draft – never sent (Antwortentwurf – wird nie gesendet)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 Reply draft – never sent (Antwortentwurf – wird nie gesendet)": {
+      "main": [
+        [
+          {
+            "node": "6 Internal task (Interne Aufgabe)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E-mail received (E-Mail eingegangen)": {
+      "main": [
+        [
+          {
+            "node": "Prepare e-mail (E-Mail vorbereiten)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare e-mail (E-Mail vorbereiten)": {
+      "main": [
+        [
+          {
+            "node": "1 Understand – AI or rules (Verstehen – KI oder Regeln)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 Internal task (Interne Aufgabe)": {
+      "main": [
+        [
+          {
+            "node": "Emergency? (Notfall?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emergency? (Notfall?)": {
+      "main": [
+        [
+          {
+            "node": "Alert on-call team – production (Bereitschaft alarmieren – Produktion)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Which status? (Welcher Status?)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Which status? (Welcher Status?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Which status? (Welcher Status?)": {
+      "main": [
+        [
+          {
+            "node": "Ready for approval (Bereit zur Freigabe)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Question to tenant prepared (Rückfrage vorbereitet)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Forward to the right team (An Fachstelle weiterleiten)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready for approval (Bereit zur Freigabe)": {
+      "main": [
+        [
+          {
+            "node": "Store in review list (In Prüfliste ablegen)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question to tenant prepared (Rückfrage vorbereitet)": {
+      "main": [
+        [
+          {
+            "node": "Store in review list (In Prüfliste ablegen)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Forward to the right team (An Fachstelle weiterleiten)": {
+      "main": [
+        [
+          {
+            "node": "Store in review list (In Prüfliste ablegen)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store in review list (In Prüfliste ablegen)": {
+      "main": [
+        [
+          {
+            "node": "Reply to caller (Antwort an Aufrufer)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all"
+  },
+  "active": false,
+  "pinData": {},
+  "tags": [],
+  "id": "iM8N72bLtuYUcMK3"
+}

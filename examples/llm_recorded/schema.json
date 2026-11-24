@@ -1,0 +1,159 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "classification",
+    "extraction",
+    "urgency_hint",
+    "urgency_hint_reason"
+  ],
+  "properties": {
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "category",
+        "trade",
+        "confidence",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "SCHADENMELDUNG",
+            "ANFRAGE_MIETE",
+            "SONSTIGES"
+          ]
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trade": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confidence": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "extraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tenant_name",
+        "sender_name",
+        "street_raw",
+        "house_no",
+        "floor_raw",
+        "side_raw",
+        "room",
+        "damage_description",
+        "since",
+        "photos_mentioned",
+        "phone",
+        "language"
+      ],
+      "properties": {
+        "tenant_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sender_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "street_raw": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "house_no": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "floor_raw": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "side_raw": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "room": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "damage_description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "since": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "phone": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "photos_mentioned": {
+          "type": "boolean"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "de",
+            "en"
+          ]
+        }
+      }
+    },
+    "urgency_hint": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "NOTFALL",
+        "DRINGEND",
+        "NORMAL",
+        null
+      ]
+    },
+    "urgency_hint_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}
